@@ -1,0 +1,33 @@
+---
+title: Sideloading an OTA image
+description: How to reinstall or upgrade stock PICO firmware on your headset.
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+## Before you begin
+
+<Steps>
+1. Download the correct firmware for your headset using [crx's guide](//pico.crx.moe/docs/picoos-research/version-table).
+2. Connect your headset to your computer via a reliable USB-C cable.
+</Steps>
+
+<Aside type="caution">
+You cannot downgrade to a firmware version lower than your current version, or switch your current firmware's region using OTAs.
+</Aside>
+
+## From PICO OS
+<Steps>
+1. Create a folder on the root of the headset's storage called `dload`.
+2. Copy the firmware you downloaded into this folder without extracting it.
+3. On the headset, go to Settings > General > System Update, and select Offline Update.
+</Steps>
+
+## From recovery mode
+<Steps>
+1. You will need a copy of `adb`. If it is not installed on your computer, it is included with `picounlock`.
+1. On the headset, "Apply update from ADB".
+2. `adb sideload <path_to_downloaded_firmware>`
+3. Wait for it to finish (it will likely take some time).
+4. Optionally, on the headset, "Wipe data/factory reset".
+</Steps>

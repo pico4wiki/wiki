@@ -1,0 +1,49 @@
+---
+title: Home
+description: A collection of resources focusing on the PICO 4 family of headsets.
+template: splash
+hero:
+  title: pico4.wiki
+  tagline: A collection of resources focusing on the PICO 4.
+  image:
+    file: ../../assets/pico-4-enterprise.png
+  actions:
+    - text: Get started
+      link: /devices
+      icon: right-caret
+    - text: GitHub
+      link: //github.com/pico4wiki/wiki
+      variant: secondary
+      icon: github
+---
+
+import { Card, LinkCard, CardGrid } from "@astrojs/starlight/components";
+
+# Introduction
+
+This website aims to be the defacto third-party resource for the PICO 4 family of headsets.
+All information here is sourced and written by the community, so there may be knowledge gaps.
+If you feel like you have something to contribute, check out our [GitHub](//github.com/pico4wiki/wiki).
+
+## Quick links
+
+<CardGrid>
+	<LinkCard
+	  href="/devices"
+		title="Choosing a headset"
+		description="How to get your hands on a PICO 4, and which one to pick."
+	/>
+	<LinkCard
+		title="Standalone usage"
+		description="Advice for using your headset as a standalone VR/XR device."
+	/>
+	<LinkCard
+		title="PCVR usage"
+		description="Advice for streaming from a computer to your headset."
+	/>
+	<LinkCard
+		href="/guides/root/01-root"
+		title="Rooting"
+		description="Rooting your headset, allowing for extended functionality."
+	/>
+</CardGrid>

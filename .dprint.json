@@ -1,0 +1,16 @@
+{
+	"useTabs": true,
+	"lineWidth": 120,
+	"excludes": [
+		"**/node_modules",
+		"**/*-lock.*",
+		"**/dist"
+	],
+	"plugins": [
+		"npm:@dprint/typescript@0.96.1",
+		"npm:@dprint/json@0.23.0",
+		"npm:@dprint/markdown@0.22.1",
+		"npm:dprint-plugin-malva@0.16.0",
+		"npm:dprint-plugin-markup@0.27.3",
+	]
+}

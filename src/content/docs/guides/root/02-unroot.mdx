@@ -1,0 +1,53 @@
+---
+title: Unrooting/Returning to stock
+description: Step-by-step guide on returning your headset to a stock state.
+---
+
+import { Aside, LinkCard, Steps } from "@astrojs/starlight/components";
+
+<Aside type="danger">
+Locking the bootloader, like unlocking it, **requires** your headset to be factory reset! **You will lose anything you do not back up!**
+</Aside>
+
+## Before you begin
+
+<Steps>
+1. Ensure you have the files output by `picounlock` to the `device_backup` folder (or your own dump of `abl.bin` and optionally `devinfo.bin`), as well as your unlock key.
+2. Connect your headset to your computer via a reliable USB-C cable.
+3. You will also need a copy of `adb` and `fastboot`. If these are not installed on your computer, they are included with `picounlock`.
+</Steps>
+
+## Steps
+
+<Steps>
+1. `adb reboot bootloader`
+2. `fastboot oem picoXXXXXXXX unlock`, replacing `XXXXXXXX` with your unlock key.
+</Steps>
+<Aside type="caution">
+If you used the original version of `picounlock`, you will need to restore your backed up `devinfo.bin`.
+This step was determined to be unnecessary in future releases, and was removed.
+
+`fastboot flash devinfo <path_to_backed_up_devinfo>`
+</Aside>
+<Steps>
+3. `fastboot flash abl <path_to_backed_up_abl>`
+4. `fastboot oem setenforce 1`
+5. `fastboot flashing lock`
+6. `fastboot flashing lock_critical`
+7. Boot the headset with `fastboot reboot`. After a short wait, Android Recovery should ask you to factory reset - do so!
+</Steps>
+
+Your headset should now be in a stock state, with SELinux `Enforcing` and a locked bootloader!
+If this is not the case, proceed to [Troubleshooting](#troubleshooting).
+
+### Troubleshooting
+
+#### Headset will not get past the bootloader
+
+There are a few reasons for this - you can determine the issue you are encountering via running `adb reboot recovery`.
+If the headset **does** reboot into recovery mode, you have likely modified a partition and did not return it to a stock state before locking the bootloader.
+A locked bootloader will not accept this - the easiest way recover your headset is to [sideload an OTA image](/guides/ota).
+
+If the headset **does not** boot into recovery mode, it is likely that you did not correctly reflash the stock ABL file.
+As long as you are still using the PICO Neo 3 Pro ABL file used to unlock the device, this too is recoverable.
+You can determine whether this is the case by how the bootloader screen looks. If you can read `kona`, you are still using the PICO 3 ABL.
