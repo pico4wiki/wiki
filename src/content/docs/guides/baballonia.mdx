@@ -1,0 +1,27 @@
+---
+title: Face Tracking with Baballonia
+description: Using Baballonia to run eye and face tracking instead of onboard tracking
+---
+
+The PICO 4 Pro and PICO 4 Enterprise headsets feature on-headset eye tracking and face tracking.
+The tracking from this is transmitted through PICO Connect and
+[can be used with VRCFaceTracking](https://docs.vrcft.io/docs/hardware/vr/pico/pico4pe).
+
+When these headsets are [rooted](/guides/root/01-root), you may instead send the raw camera feeds over the network to
+[Baballonia](https://store.steampowered.com/app/4091970/Project_Babble_Baballonia/) to run the tracking on your PC.
+
+This works well for eye tracking but less consistently for lower face tracking, due to the unconventional position of
+the camera on these headsets.
+
+## Steps
+
+1. Root your headset following the relevant guide. Make sure you enable Zygisk.
+2. Enable eye tracking and face tracking in settings
+3. Calibrate eye tracking now - while eyed is enabled, calibration does not work.
+4. Download [eyed] and [eyestream] on the headset, place them into the `Download` folder,
+   and install them from Magisk. (TODO: download links)
+5. Reboot your headset
+6. Open Baballonia, find your headset's IP address, and set the camera feeds as:
+    - http://(headset IP):4442/left
+    - http://(headset IP):4442/right
+    - http://(headset IP):4442/mouth

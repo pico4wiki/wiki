@@ -24,6 +24,7 @@ export default defineConfig({
 								{ label: "Unrooting", slug: "guides/root/02-unroot" },
 							],
 						},
+						{ label: "Face Tracking with Baballonia", slug: "guides/baballonia" },
 					],
 				},
 			],
