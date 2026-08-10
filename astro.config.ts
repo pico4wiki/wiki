@@ -26,6 +26,12 @@ export default defineConfig({
 						},
 					],
 				},
+				{
+					label: "Additional Info",
+					items: [
+						{ label: "Downloads", slug: "downloads" },
+					],
+				},
 			],
 		}),
 	],
