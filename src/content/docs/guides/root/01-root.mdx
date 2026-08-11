@@ -70,7 +70,7 @@ return f"fastboot oem pico{encoded_serial} unlock"
 <Steps>
 1. You will need a copy of `adb`. If it is not installed on your computer, it is included with `picounlock`.
 2. Download a [stock OTA image](/guides/ota) for your firmware version, and extract the `boot.img` to your computer.
-3. Download `Magisk4Pico.apk` (stock Magisk will NOT work!).
+3. [Download `Magisk4Pico.apk`](/magisk4pico/Magisk4Pico.apk) (stock Magisk will NOT work!).
 4. `adb push boot.img /sdcard/Download`
 5. `adb install Magisk4Pico.apk`
 6. Open the `Magisk4Pico` app on your headset, and choose Install > Select and Patch a File, and choose `boot.img`.
