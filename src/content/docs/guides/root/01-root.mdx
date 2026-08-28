@@ -21,6 +21,8 @@ Rooting your headset and unlocking the bootloader **requires** your headset to b
 ### Using `picounlock`
 `picounlock` is an all-in-one tool for unlocking your PICO 4's bootloader.
 
+[Download `picounlock` here (Windows, x86_64)](/picounlock/picounlock-windows-x86_64-v1.0.5_596340.zip)
+
 <Steps>
 1. Connect your headset to your computer via a reliable USB-C cable.
 2. Download and run `picounlock` for your operating system.
@@ -68,7 +70,7 @@ return f"fastboot oem pico{encoded_serial} unlock"
 <Steps>
 1. You will need a copy of `adb`. If it is not installed on your computer, it is included with `picounlock`.
 2. Download a [stock OTA image](/guides/ota) for your firmware version, and extract the `boot.img` to your computer.
-3. Download `Magisk4Pico.apk` (stock Magisk will NOT work!).
+3. [Download `Magisk4Pico.apk`](/magisk4pico/Magisk4Pico.apk) (stock Magisk will NOT work!).
 4. `adb push boot.img /sdcard/Download`
 5. `adb install Magisk4Pico.apk`
 6. Open the `Magisk4Pico` app on your headset, and choose Install > Select and Patch a File, and choose `boot.img`.
