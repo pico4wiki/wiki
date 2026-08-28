@@ -24,6 +24,13 @@ export default defineConfig({
 								{ label: "Unrooting", slug: "guides/root/02-unroot" },
 							],
 						},
+						{
+							label: "Face Tracking",
+							items: [
+								{ label: "Baballonia", slug: "guides/ft/baballonia" },
+								{ label: "VRCFT without PICO Connect", slug: "guides/ft/vrcft-stream" },
+							]
+						},
 					],
 				},
 				{
