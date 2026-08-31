@@ -30,6 +30,27 @@ Rooting your headset and unlocking the bootloader **requires** your headset to b
 4. Take note of the unlock key, displayed in the UI and printed in the log file. It looks like `picoXXXXXXXX`.
 </Steps>
 
+#### Putting back the original ABL.
+Since this tool does (not yet...) flash back the original PICO 4 ABL, your device will be slow to boot, this is normal.  
+We will therefore have to reflash the original ABL that was on your device.
+
+Requirements:
+- Make sure you first follow [the Magisk installation.](#installing-magisk)
+- Make sure you have adb installed, or use the one included with `picounlock`.
+
+Steps:
+<Steps>
+1. Go the `picounlock` directory, then to `device-backup` and copy the `abl.bin` to the root of your PICO.
+2. Be ready to put on your headset, after you run the commands below a prompt will appear that you will have to accept.
+3. Then type `adb shell`, `su`.  
+(If you missed this prompt, open the Magisk app > Superuser > Enable shell)
+4. You should now have a root shell.
+5. Now we will flash back the original ABL:  
+`dd if=/sdcard/abl.bin of=/dev/block/by-name/abl`
+6. Type `reboot`.  
+Your device will now boot faster again, and you will be able to use Magisk modules.
+</Steps>
+
 ### Manually
 {/* TODO: Ah, eto... blehhhh */}
 <Aside type="caution">
@@ -37,8 +58,9 @@ These steps need work, and I'm not qualified enough to do so.
 You probably should just use `picounlock` for now, but if you really are feeling brave, have a look at [`more-picohaxx`](//github.com/264312431/more-picohaxx/blob/b58d4bea338376024d0a936296da993ccd255d3c/more-picohaxx.py).
 </Aside>
 <Steps>
-1. Flash the PICO 3 ABL to your headset using EDL mode and the leaked PICO engineering firehose.
-2. Calculate your headset's unlock key for use in the PICO 3 ABL using the below Python script:
+1. Back up the ABL partition on your PICO via EDL.
+2. Flash the PICO 3 ABL to your headset using EDL mode and the leaked PICO engineering firehose.
+3. Calculate your headset's unlock key for use in the PICO 3 ABL using the below Python script:
 </Steps>
 ```python
 def generate_unlock(serial: int):
@@ -58,12 +80,14 @@ else:
 return f"fastboot oem pico{encoded_serial} unlock"
 ```
 <Steps>
-3. `fastboot oem picoXXXXXXXX unlock`, replacing `XXXXXXXX` with your unlock key.
-4. `fastboot flashing unlock_critical`
-5. `fastboot flashing unlock`
-6. `fastboot oem setenforce 0`
-7. `fastboot reboot-bootloader` - you should now see `Device state: unlocked` in the headset.
-8. Boot the headset with `fastboot reboot`. After a short wait, Android Recovery should ask you to factory reset - do so!
+4. `fastboot oem picoXXXXXXXX unlock`, replacing `XXXXXXXX` with your unlock key.
+5. `fastboot flashing unlock_critical`
+6. `fastboot flashing unlock`
+7. `fastboot oem setenforce 0`
+8. `fastboot reboot-bootloader` - you should now see `Device state: unlocked` in the headset.
+9. Boot the headset with `fastboot reboot`. After a short wait, Android Recovery should ask you to factory reset - do so!
+10. Reflash the original PICO ABL you backed-up in step 1.  
+(If you did not back up your ABL, you can find the ABL inside the `firmware-update` folder of the [OTA](https://pico.crx.moe/docs/picoos-research/version-table#pico-4-series) provided by PICO.)
 </Steps>
 
 ## Installing Magisk
@@ -83,3 +107,5 @@ return f"fastboot oem pico{encoded_serial} unlock"
 </Steps>
 
 Your headset should now be rooted, and you are free to install Magisk modules. It is recommended that you go through Magisk's settings and enable Zygisk.
+
+If you experience a black screen when installing modules, follow the [restoring your ABL guide](#putting-back-the-original-abl)
