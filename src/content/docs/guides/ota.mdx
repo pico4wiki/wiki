@@ -20,14 +20,15 @@ You cannot downgrade to a firmware version lower than your current version, or s
 <Steps>
 1. Create a folder on the root of the headset's storage called `dload`.
 2. Copy the firmware you downloaded into this folder without extracting it.
-3. On the headset, go to Settings > General > System Update, and select Offline Update.
+3. On the headset, go to `Settings > General > System Update`, and select `Offline Update`.
 </Steps>
 
 ## From recovery mode
 <Steps>
-1. You will need a copy of `adb`. If it is not installed on your computer, it is included with `picounlock`.
-1. On the headset, "Apply update from ADB".
+1. You will need a copy of ADB on your computer.
+2. If you are not already in recovery mode, `adb reboot recovery`, or hold down Volume Up when powering on the headset.
+1. On the headset, `Apply update from ADB`.
 2. `adb sideload <path_to_downloaded_firmware>`
-3. Wait for it to finish (it will likely take some time).
-4. Optionally, on the headset, "Wipe data/factory reset".
+3. Wait for it to finish (it will take a while).
+4. Optionally, on the headset, `Wipe data/factory reset`.
 </Steps>

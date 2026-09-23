@@ -5,12 +5,12 @@ description: Using onboard tracking and sending it to VRCFT without using PICO C
 
 The PICO 4 Pro and PICO 4 Enterprise headsets feature on-headset eye tracking and face tracking.
 The tracking from this is transmitted through PICO Connect and
-[can be used with VRCFaceTracking](https://docs.vrcft.io/docs/hardware/vr/pico/pico4pe).
+[can be used with VRCFaceTracking](//docs.vrcft.io/docs/hardware/vr/pico/pico4pe).
 
 However, if you are using Steam Link, ALVR, or Virtual Desktop, you cannot use this method.
 
 When these headsets are [rooted](/guides/root/01-root), you may instead send the tracking data from the PICO XR API to
-your PC over a side channel and have VRCFaceTracking use that.
+your computer over a side channel and have VRCFaceTracking use that.
 
 This also gives slightly improved tracking quality than PICO Connect as it is using a newer version of the face tracking
 protocol, and is in my experience more stable, but can have issues with jittery tracking - YMMV.
@@ -20,9 +20,9 @@ You should not combine this method with [eyed](/guides/ft/baballonia).
 ## Steps
 
 1. Root your headset following the relevant guide. Make sure you enable Zygisk.
-2. Enable eye tracking and face tracking in settings
-3. Download the `picofacialdatadaemon-magisk-module.zip` from [thoricelli/PicoFacialDataDaemon](https://github.com/thoricelli/PicoFacialDataDaemon/releases)
+2. Enable `Eye Tracking` and `Face Tracking` in `Settings > LAB`.
+3. Download the `picofacialdatadaemon-magisk-module.zip` from [thoricelli/PicoFacialDataDaemon](//github.com/thoricelli/PicoFacialDataDaemon/releases)
    on your headset, place it in the `Download` folder, and flash it via Magisk.
-4. Reboot your headset
-5. Download the `picofacialdatamodule.zip` from [thoricelli/PicoFacialDataModule](https://github.com/thoricelli/PicoFacialDataModule/releases)
-   on your PC, open VRCFaceTracking, and go to Module Registry > plus at the top, and select this zip file.
+4. Reboot your headset.
+5. Download the `picofacialdatamodule.zip` from [thoricelli/PicoFacialDataModule](//github.com/thoricelli/PicoFacialDataModule/releases)
+   on your computer, open VRCFaceTracking, and go to `Module Registry`, click the plus at the top, and select the zip file.

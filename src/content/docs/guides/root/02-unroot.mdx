@@ -6,8 +6,7 @@ description: Step-by-step guide on returning your headset to a stock state.
 import { Aside, LinkCard, Steps } from "@astrojs/starlight/components";
 
 <Aside type="caution">
-These instructions were written for and have only been tested on `phoenix` devices (PICO 4, PICO 4 Pro and PICO 4 Enterprise).
-They likely will not work on `sparrow` devices (PICO 4 Ultra or Ultra Enterprise). **If you try anyway, here be dragons!**
+These instructions only cover `phoenix` headsets (PICO 4, PICO 4 Pro and PICO 4 Enterprise). They will not work on `sparrow` headsets (PICO 4 Ultra or Ultra Enterprise)!
 </Aside>
 
 <Aside type="danger">
@@ -17,9 +16,9 @@ Locking the bootloader, like unlocking it, **requires** your headset to be facto
 ## Before you begin
 
 <Steps>
-1. Ensure you have the files output by `picounlock` to the `device_backup` folder (or your own dump of `abl.bin` and optionally `devinfo.bin`), as well as your unlock key.
+1. Ensure you have the files output by PicoUnlock to the `device_backup` folder (or your own dump of `abl.bin` and optionally `devinfo.bin`), as well as your unlock key.
 2. Connect your headset to your computer via a reliable USB-C cable.
-3. You will also need a copy of `adb` and `fastboot`. If these are not installed on your computer, they are included with `picounlock`.
+3. You will also need a copy of ADB and fastboot. If these are not installed on your computer, they are included with PicoUnlock.
 </Steps>
 
 ## Steps
@@ -29,7 +28,7 @@ Locking the bootloader, like unlocking it, **requires** your headset to be facto
 2. `fastboot oem picoXXXXXXXX unlock`, replacing `XXXXXXXX` with your unlock key.
 </Steps>
 <Aside type="caution">
-If you used the original version of `picounlock`, you will need to restore your backed up `devinfo.bin`.
+If you used the original version of PicoUnlock, you will need to restore your backed up `devinfo.bin`.
 This step was determined to be unnecessary in future releases, and was removed.
 
 `fastboot flash devinfo <path_to_backed_up_devinfo>`
@@ -49,10 +48,11 @@ If this is not the case, proceed to [Troubleshooting](#troubleshooting).
 
 #### Headset will not get past the bootloader
 
-There are a few reasons for this - you can determine the issue you are encountering via running `adb reboot recovery`.
+There are a few reasons for this - you can determine the issue you are encountering by running `adb reboot recovery`.
 If the headset **does** reboot into recovery mode, you have likely modified a partition and did not return it to a stock state before locking the bootloader.
 A locked bootloader will not accept this - the easiest way recover your headset is to [sideload an OTA image](/guides/ota).
 
+{/* TODO: I wrote this paragraph at like 5am and it kind of reads like bullshit now */}
 If the headset **does not** boot into recovery mode, it is likely that you did not correctly reflash the stock ABL file.
-As long as you are still using the PICO Neo 3 Pro ABL file used to unlock the device, this too is recoverable.
+As long as you are still using the PICO Neo 3 Pro ABL file used to unlock the headset, this too is recoverable.
 You can determine whether this is the case by how the bootloader screen looks. If you can read `kona`, you are still using the PICO 3 ABL.

@@ -6,6 +6,21 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: "pico4.wiki",
+			social: [
+				{
+					icon: "github",
+					label: "GitHub",
+					href: "//github.com/pico4wiki/wiki",
+				},
+				{
+					icon: "discord",
+					label: "Discord",
+					href: "//discord.gg/GKGQxQXw7X",
+				},
+			],
+			editLink: {
+				baseUrl: "https://github.com/pico4wiki/wiki/edit/master/",
+			},
 			sidebar: [
 				{
 					label: "Required reading",
@@ -18,7 +33,7 @@ export default defineConfig({
 					items: [
 						{ label: "Sideloading an OTA image", slug: "guides/ota" },
 						{
-							label: "Rooting your device",
+							label: "Rooting",
 							items: [
 								{ label: "Rooting", slug: "guides/root/01-root" },
 								{ label: "Unrooting", slug: "guides/root/02-unroot" },
@@ -29,7 +44,7 @@ export default defineConfig({
 							items: [
 								{ label: "Baballonia", slug: "guides/ft/baballonia" },
 								{ label: "VRCFT without PICO Connect", slug: "guides/ft/vrcft-stream" },
-							]
+							],
 						},
 					],
 				},
