@@ -55,7 +55,7 @@ export default defineConfig({
 					label: "Utilities",
 					items: [
 						{ label: "Downloads", slug: "downloads" },
-						{ label: "Debloat Tool", slug: "debloat" },
+						{ label: "Debloating Tool", slug: "debloat" },
 					],
 				},
 			],
