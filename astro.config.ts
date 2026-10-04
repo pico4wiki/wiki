@@ -52,9 +52,10 @@ export default defineConfig({
 					],
 				},
 				{
-					label: "Additional Info",
+					label: "Utilities",
 					items: [
 						{ label: "Downloads", slug: "downloads" },
+						{ label: "Debloat Tool", slug: "debloat" },
 					],
 				},
 			],
