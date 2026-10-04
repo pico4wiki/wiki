@@ -16,6 +16,7 @@
 		"@yume-chan/adb-credential-web": "^2.1.0",
 		"@yume-chan/adb-daemon-webusb": "^2.3.2",
 		"astro": "^7.3.3",
+		"jszip": "^3.10.2",
 		"sharp": "^0.35.4",
 		"solid-js": "^1.9.15"
 	},
