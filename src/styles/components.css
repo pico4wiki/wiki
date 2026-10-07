@@ -1,0 +1,39 @@
+@layer p4wiki-components {
+	button.p4w-custom {
+		font-size: var(--sl-text-sm);
+		outline-offset: 0.25rem;
+		border: 1px solid #0000;
+		border-radius: 999rem;
+		align-items: center;
+		gap: 0.5em;
+		padding: 0.4375rem 1.125rem;
+		line-height: 1.1875;
+		text-decoration: none;
+		display: inline-flex;
+		cursor: pointer;
+	}
+
+	button.p4w-custom.primary {
+		background: var(--sl-color-text-accent);
+		border-color: var(--sl-color-text-accent);
+		color: var(--sl-color-black);
+	}
+
+	input[type="checkbox"].p4w-custom {
+		accent-color: var(--sl-color-text-accent);
+	}
+
+	.p4w-custom.card {
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.5rem;
+		padding: 1.5rem;
+		box-shadow: var(--sl-shadow-sm);
+		position: relative;
+	}
+
+	.p4w-custom.card.primary {
+		background-color: hsla(224, 100%, 85%, 0.2);
+	}
+}
