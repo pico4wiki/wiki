@@ -36,7 +36,8 @@ export default defineConfig({
 							label: "Rooting",
 							items: [
 								{ label: "Rooting", slug: "guides/root/01-root" },
-								{ label: "Unrooting", slug: "guides/root/02-unroot" },
+								{ label: "Post-Root Suggestions", slug: "guides/root/02-post-root" },
+								{ label: "Unrooting", slug: "guides/root/03-unroot" },
 							],
 						},
 						{
