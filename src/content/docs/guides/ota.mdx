@@ -4,11 +4,17 @@ description: How to reinstall or upgrade stock PICO firmware on your headset.
 ---
 
 import { Aside, Steps } from "@astrojs/starlight/components";
-import OtpWizard from "../../../components/OtpWizard.tsx";
+import OtaWizard from "../../../components/OtaWizard.tsx";
 
 ## Finding the correct OTA image
 
-<OtpWizard client:load />
+<OtaWizard client:only />
+
+<noscript>
+    <div class="p4w-custom card" style="margin-top: 1rem">
+        Sorry, this tool only works with JavaScript enabled.
+    </div>
+</noscript>
 
 ## Before you begin
 
