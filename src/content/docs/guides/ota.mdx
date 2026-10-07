@@ -19,7 +19,7 @@ import OtaWizard from "../../../components/OtaWizard.tsx";
 ## Before you begin
 
 <Steps>
-1. Download the correct firmware for your headset using [crx's guide](//pico.crx.moe/docs/picoos-research/version-table).
+1. Download the correct firmware for your headset from [crx's list](//pico.crx.moe/docs/picoos-research/version-table).
 2. Connect your headset to your computer via a reliable USB-C cable.
 </Steps>
 
@@ -27,14 +27,14 @@ import OtaWizard from "../../../components/OtaWizard.tsx";
 You cannot downgrade to a firmware version lower than your current version, or switch your current firmware's region using OTAs.
 </Aside>
 
-## From PICO OS
+## Flashing from PICO OS
 <Steps>
 1. Create a folder on the root of the headset's storage called `dload`.
 2. Copy the firmware you downloaded into this folder without extracting it.
 3. On the headset, go to `Settings > General > System Update`, and select `Offline Update`.
 </Steps>
 
-## From recovery mode
+## Flashing from recovery mode
 <Steps>
 1. You will need a copy of ADB on your computer.
 2. If you are not already in recovery mode, `adb reboot recovery`, or hold down Volume Up when powering on the headset.

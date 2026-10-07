@@ -170,7 +170,7 @@ export default () => {
 	return <>
 		<div>
 			This tool will find the latest OTA image for your headset.
-			{"usb" in navigator && "To use auto-detection, connect your headset to your PC with a USB cable."}
+			{"usb" in navigator && " To use auto-detection, connect your headset to your PC with a USB cable."}
 		</div>
 
 		<div class="p4w-custom card">
