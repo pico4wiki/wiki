@@ -58,6 +58,7 @@ export default defineConfig({
 					],
 				},
 			],
+			customCss: ["/src/styles/components.css"],
 		}),
 		solidJs(),
 	],
