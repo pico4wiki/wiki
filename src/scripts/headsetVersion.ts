@@ -14,43 +14,38 @@ export const getNeo3IsSek = async (adb: Adb) => await adb.getProp("ro.secure.boo
 export const getHeadsetOverseas = async (adb: Adb) => await adb.getProp("ro.pvr.product.global") === "overseas";
 
 export type Firmware = {
-	family: "sparrow"; // PICO 4 Ultra
-	variant: "SEK";
+	region: "china" | "overseas";
 	version?: string;
 	buildNo: number;
 	buildDate?: string;
-	region: "china" | "overseas";
+	dlUrl?: string;
+} & ({
+	family: "sparrow"; // PICO 4 Ultra
+	variant: "SEK";
 } | {
 	family: "phoenix"; // PICO 4
 	variant: "SEK" | "SEKO";
-	version?: string;
-	buildNo: number;
-	buildDate?: string;
-	region: "china" | "overseas";
 } | {
 	family: "neo3"; // PICO Neo3
 	variant: "SEK" | "K";
-	version?: string;
-	buildNo: number;
-	buildDate?: string;
-	region: "china" | "overseas";
 } | {
 	family: "merline"; // PICO G3
 	variant: "SEK";
-	version?: string;
-	buildNo: number;
-	buildDate?: string;
-	region: "china" | "overseas";
-}
+})
 
 // sparrow: testing TODO
 // phoenix: tested
-// neo3: waiting on a volunteer to test
+// neo3: tested
 // merline: waiting on a volunteer to test
 export const getFullFirmwareInfo = async (adb: Adb): Promise<Firmware | undefined> => {
 	const firmwareString = await getFirmwareString(adb);
 	const family = getHeadsetFamily(firmwareString);
-	const version = firmwareString.match(/(\d+\.\d+\.\d+)_/)?.[1]
+
+	// firmware string format:
+	// c000_rf01_bv1.0.1_sv5.13.7_202510301735_phoenix_b9665_user
+	// c000_rf01_bv1.0.1_sv5.11.3.0_202409120321_neo3_b3013_user
+
+	const version = firmwareString.match(/sv(\d+(:?\.\d+)*)_/)?.[1]
 	const buildNo = parseInt(firmwareString.match(/_b(\d+)_/)?.[1] ?? "guh");
 	const buildDate = firmwareString.match(/_(20\d{10})_/)?.[1];
 	const region = await getHeadsetOverseas(adb) ? "overseas" : "china";
