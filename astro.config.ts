@@ -1,6 +1,8 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 
+import solidJs from "@astrojs/solid-js";
+
 export default defineConfig({
 	site: "https://pico4.wiki",
 	integrations: [
@@ -57,5 +59,6 @@ export default defineConfig({
 				},
 			],
 		}),
+		solidJs(),
 	],
 });
