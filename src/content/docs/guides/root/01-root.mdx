@@ -114,7 +114,7 @@ Steps:
 (If you missed this prompt, open the Magisk app > Superuser > Enable shell)
 4. You should now have a root shell.
 5. Backup the Neo3 ABL for convenience:
-`dd if=/dev/block-by-name/abl of=/sdcard/abl-picounlock.bin`
+`dd if=/dev/block/by-name/abl of=/sdcard/abl-picounlock.bin`
 6. Now we will flash back the original (PICO 4) ABL:
 `dd if=/sdcard/abl.bin of=/dev/block/by-name/abl`
 7. Reboot your headset
