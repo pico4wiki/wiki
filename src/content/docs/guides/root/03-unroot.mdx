@@ -3,7 +3,7 @@ title: Unrooting/Returning to stock
 description: Step-by-step guide on returning your headset to a stock state.
 ---
 
-import { Aside, LinkCard, Steps } from "@astrojs/starlight/components";
+import {Aside, LinkCard, Steps, TabItem, Tabs} from "@astrojs/starlight/components";
 
 <Aside type="caution">
 These instructions only cover `phoenix` headsets (PICO 4, PICO 4 Pro and PICO 4 Enterprise). They will not work on `sparrow` headsets (PICO 4 Ultra or Ultra Enterprise)!
@@ -26,10 +26,31 @@ Locking the bootloader, like unlocking it, **requires** your headset to be facto
 <Steps>
 1. `adb reboot bootloader`
 2. `fastboot oem picoXXXXXXXX unlock`, replacing `XXXXXXXX` with your unlock key.
+
+	{/* TODO: this will need updating AGAIN to handle chow. that is later me's problem */}
+	At this point, look into the left eye and see whether the listed product name is `kona` or `phoenix`.
+
+	<Tabs>
+		<TabItem label="kona">Assuming the bootloader says it is unlocked, move onto the next step.</TabItem>
+
+		<TabItem label="phoenix">
+			You will need to reflash the Pico Neo3 unlocked bootloader. Boot into android.
+
+			Assuming you have a copy on your headset at `/sdcard/abl-picounlock.bin`, run
+			`adb shell`, then type `su`.
+			If a prompt does not immediately appear, put on your headset and approve the root request popup.
+
+			Type `dd if=/sdcard/abl-picounlock.bin of=/dev/block/by-name/abl`.
+
+			Now reboot into the bootloader again with `adb reboot bootloader`.
+		</TabItem>
+	</Tabs>
 </Steps>
+
 <Aside type="caution">
 If you used the original version of PicoUnlock, you will need to restore your backed up `devinfo.bin`.
 This step was determined to be unnecessary in future releases, and was removed.
+If your `device_backup` folder did not contain a copy of devinfo.bin, you do not need to restore it.
 
 `fastboot flash devinfo <path_to_backed_up_devinfo>`
 </Aside>
