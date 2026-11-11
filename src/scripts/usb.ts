@@ -3,8 +3,8 @@ import {AdbDaemonWebUsbDeviceManager} from "@yume-chan/adb-daemon-webusb";
 import AdbWebCredentialStore from "@yume-chan/adb-credential-web"
 // @ts-expect-error
 import {FastbootDevice} from "android-fastboot"
-import {qdlDevice} from "@andiradulescu/qdl"
-import {usbClass} from "@andiradulescu/qdl/usblib";
+import {qdlDevice} from "@pico4wiki/qdl"
+import {usbClass} from "@pico4wiki/qdl/usblib";
 
 const USB_MANAGER = AdbDaemonWebUsbDeviceManager.BROWSER;
 const USB_CRED_STORE = new AdbWebCredentialStore("pico4.wiki");
