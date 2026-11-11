@@ -6,6 +6,6 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - "@astrojs/starlight@0.41.7"
-  - "@pico4wiki/qdl@0.0.1"
+  - "@pico4wiki/qdl@0.0.4"
 
 blockExoticSubdeps: false

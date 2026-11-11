@@ -2,14 +2,14 @@ export function generateUnlock(serial: number) {
 	// chaixshot/more-picohaxx
 	const key = "0XD9J6FB3ATQIHNM46XYZZZOPQRSTUVWXYZ";
 
-	let val = serial & 0xF7F3F37F;
+	let val = BigInt(serial) & 0xF7F3F37Fn;
 
-	if (val === 0)  return "pico0";
+	if (val === 0n)  return "pico0";
 
 	const encoded_chars = [];
-	while (val > 0) {
-		encoded_chars.push(key[val & 0xF]);
-		val >>= 4;
+	while (val > 0n) {
+		encoded_chars.push(key[Number(val & 0xFn)]);
+		val >>= 4n;
 	}
 	return `pico${encoded_chars.reverse().join("")}`;
 }

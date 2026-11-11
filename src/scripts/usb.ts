@@ -28,13 +28,8 @@ export async function openAdb(): Promise<Adb | undefined> {
 
 export async function openFastboot(): Promise<FastbootDevice | undefined> {
 	const device = new FastbootDevice();
-	try {
-		await device.connect();
-		if (!device.device) return;
-	} catch (e) {
-		console.error(e);
-		return;
-	}
+	await device.connect();
+	if (!device.device) return;
 
 	return device;
 }
@@ -42,8 +37,8 @@ export async function openFastboot(): Promise<FastbootDevice | undefined> {
 const BUCKET_URL = "https://f004.backblazeb2.com/file/pico4wiki-ota-mirror/";
 const URL_prog_firehose_ddr = BUCKET_URL + "p3/prog_firehose_ddr.elf"; // DDR4
 const URL_prog_firehose_lite = BUCKET_URL + "p3/prog_firehose_lite.elf"; // DDR5
-const URL_devinfo = BUCKET_URL + "p3/devinfo";
-const URL_abl = BUCKET_URL + "p3/abl.bin";
+//const URL_devinfo = BUCKET_URL + "p3/devinfo";
+const URL_abl = BUCKET_URL + "p3/abl.elf"; // this should be called abl.bin but oh well.
 
 export async function openQdl(firehoseType: "ddr" | "lite"): Promise<qdlDevice | undefined> {
 	let firehoseUrl = firehoseType === "ddr" ? URL_prog_firehose_ddr : URL_prog_firehose_lite;
@@ -55,17 +50,14 @@ export async function openQdl(firehoseType: "ddr" | "lite"): Promise<qdlDevice |
 	return device;
 }
 
-export async function qdlFlashRoot(device: qdlDevice): Promise<void> {
-	const [abl, devinfo] = await Promise.all([
-		fetch(URL_abl).then(r => r.blob()),
-		fetch(URL_devinfo).then(r => r.blob())
-	]);
-	await qdlFlash(device, abl, devinfo);
+export async function qdlFlashRoot(device: qdlDevice) {
+	const abl = await fetch(URL_abl).then(r => r.blob());
+	await qdlFlash(device, abl);
+	return abl;
 }
 
-export async function qdlFlash(device: qdlDevice, abl: Blob, devinfo: Blob): Promise<void> {
+export async function qdlFlash(device: qdlDevice, abl: Blob): Promise<void> {
 	await device.flashBlob("abl", abl);
-	await device.flashBlob("devinfo", devinfo);
 }
 
 // similar to qdl.js flashBlob()
@@ -79,9 +71,10 @@ async function pullPartition(device: qdlDevice, name: string): Promise<Blob> {
 	return new Blob([await device.firehose.cmdReadBuffer(lun, partition.start, Number(partition.sectors)) as Uint8Array<ArrayBuffer>])
 }
 
-export async function qdlBackup(device: qdlDevice): Promise<{ abl: Blob, devinfo: Blob }> {
+export async function qdlBackup(device: qdlDevice) {
 	const abl = await pullPartition(device, "abl");
 	const devinfo = await pullPartition(device, "devinfo");
+	const boot = await pullPartition(device, "boot");
 
-	return {abl, devinfo};
+	return {abl, devinfo, boot};
 }

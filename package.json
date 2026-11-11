@@ -10,7 +10,7 @@
 		"astro": "astro"
 	},
 	"dependencies": {
-		"@pico4wiki/qdl": "^0.0.1",
+		"@pico4wiki/qdl": "^0.0.4",
 		"@astrojs/solid-js": "^7.0.2",
 		"@astrojs/starlight": "^0.42.2",
 		"@yume-chan/adb": "^2.6.4",
