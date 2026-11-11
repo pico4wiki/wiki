@@ -1,6 +1,7 @@
 allowBuilds:
   esbuild: true
   sharp: true
+  usb: true
 
 minimumReleaseAgeExclude:
   - "@astrojs/starlight@0.41.7"
