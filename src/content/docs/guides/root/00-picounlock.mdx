@@ -1,0 +1,27 @@
+---
+title: PicoUnlock Web
+description: WebUSB-based PICO rooting tool
+---
+
+import {Aside, Card} from "@astrojs/starlight/components";
+import {PicoUnlock} from "../../../../components/PicoUnlock.tsx";
+
+<Aside type="caution">
+	These instructions only cover `phoenix` headsets (PICO 4, PICO 4 Pro and PICO 4 Enterprise). They will not work on `sparrow` headsets (PICO 4 Ultra or Ultra Enterprise)!
+</Aside>
+
+<Aside type="danger">
+	Rooting your headset and unlocking the bootloader **requires** your headset to be factory reset! **You will lose anything you do not back up!**
+</Aside>
+
+This tool can root your PICO 4 from a web browser, without installing any additional software.
+
+You can find instructions on performing the process manually or with PicoUnlock for Windows on [the next page](/guides/root/01-root).
+
+<PicoUnlock client:only />
+
+<noscript>
+    <Card>
+        This tool requires Javascript to work.
+    </Card>
+</noscript>

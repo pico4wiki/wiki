@@ -1,6 +1,11 @@
 allowBuilds:
+  '@pico4wiki/qdl': true
   esbuild: true
   sharp: true
+  usb: true
 
 minimumReleaseAgeExclude:
   - "@astrojs/starlight@0.41.7"
+  - "@pico4wiki/qdl@0.0.4"
+
+blockExoticSubdeps: false
