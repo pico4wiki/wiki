@@ -1,9 +1,14 @@
-import {createSignal, createResource, Show, Switch, Match, createEffect, createMemo} from "solid-js";
+import {createEffect, createMemo, createResource, createSignal, Match, Show, Switch} from "solid-js";
 import {openAdb, openFastboot, openQdl, qdlBackup, qdlFlashRoot} from "../scripts/usb.ts";
+import {PackageManager} from "@yume-chan/android-bin";
 import {generateUnlock} from "../scripts/unlockCode.ts";
 import JSZip from "jszip";
+import type {AdbShellProtocolProcess} from "@yume-chan/adb";
 
-function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob, devinfo: Blob, magisk?: { bootOg: Blob, bootPatched: Blob }) {
+function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob, devinfo: Blob, magisk?: {
+	bootOg: Blob,
+	bootPatched: Blob
+}) {
 	const zip = new JSZip();
 	abl4 && zip.file("abl-p4-original.bin", abl4);
 	abl3 && zip.file("abl-p3-picounlock.bin", abl3);
@@ -13,7 +18,7 @@ function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob
 
 	unlockCode && zip.file(unlockCode, `Before the ABl will accept any fastboot flashing commands, you must run \`fastboot oem ${unlockCode} unlock\`.`)
 
-	return zip.generateAsync({ compression: "STORE", type: "blob" });
+	return zip.generateAsync({compression: "STORE", type: "blob"});
 }
 
 function downloadZip(zip: Blob) {
@@ -34,7 +39,7 @@ export function PicoUnlock() {
 			<Show when={"usb" in navigator}
 				  fallback={"Your browser does not support WebUSB. Please use one (such as Chromium) that does to use this tool."}>
 				<Show when={!next()}
-					  fallback={<Step1 />}>
+					  fallback={<Step4 backups={{} as any} serialNo={2458380675}/>}>
 					<p>
 						You will need a reliable USB cable, and as the headset will not charge while in Qualcomm EDL
 						mode,
@@ -145,7 +150,7 @@ function Step2(props: { serialNo: number, isProEnterprise: boolean }) {
 		<Show when={checkReady()}>
 			<Show when={pulledImages.state === "ready"} fallback={"Backing up stock firmware..."}>
 				<Show when={flashResource.state === "ready"} fallback={"Flashing vulnerable Pico Neo3 ABL..."}>
-					<Step3 serialNo={props.serialNo} backups={{ ...pulledImages()!, ablNew: flashResource()! }} />
+					<Step3 serialNo={props.serialNo} backups={{...pulledImages()!, ablNew: flashResource()!}}/>
 				</Show>
 			</Show>
 		</Show>
@@ -287,8 +292,113 @@ function Step3(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 
 // in android: install magisk, patch boot.img, and reboot to fastboot
 function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, devinfo: Blob, boot: Blob } }) {
+
+	const [magisk4pico] = createResource(() => fetch("https://pico4.wiki/magisk4pico/Magisk4Pico.apk").then(r => r.blob()));
+
+	const [adb] = createResource(async () => {
+		const adb = await openAdb();
+		if (!adb) throw new Error("Could not open ADB");
+		return adb;
+	});
+
+	const [installResource] = createResource(() => magisk4pico.state === "ready" && adb.state === "ready", async () => {
+		const magiskBlob = magisk4pico()!;
+		//await new PackageManager(adb()!).installStream(magiskBlob.size, magiskBlob.stream() as any);
+	});
+
+	const [buildImageResource] = createResource(() => installResource.state === "ready", async () => {
+		// find Magisk apk location
+		const pkgs = new PackageManager(adb()!).listPackages({showSourceDir: true});
+
+		let apkPath: string | undefined;
+		for await (const pkg of pkgs) {
+			if (pkg.packageName === "com.topjohnwu.magisk") apkPath = pkg.sourceDir;
+		}
+
+		if (!apkPath) throw new Error("No magisk installed on headset, even though we just installed it.")
+
+		const bootimg = await fetch("https://litter.catbox.moe/3vsywq2t0lx7d5ce.img").then(r => r.blob());
+
+		//debugger;
+		// push boot to headset
+		const sync = await adb()!.sync();
+		await sync.write({
+			file: bootimg.stream() as any, //props.backups.boot.stream() as any,
+			filename: "/data/local/tmp/picounlock-boot.img"
+		});
+
+		console.log(`Unzipping magisk from ${apkPath} to /data/local/tmp/magisk-ext`);
+
+		const shellProtocol = adb()!.subprocess.shellProtocol!;
+
+		const patchProcess = await shellProtocol.spawn(`
+			# unzip magisk
+			cd /data/local/tmp && \
+			rm -rf magisk-ext && \
+			mkdir magisk-ext && \
+			unzip -d magisk-ext ${apkPath} && \
+			# copy files to where we need them
+			mkdir picounlock-patch-env && \
+			cp magisk-ext/lib/armeabi-v7a/libmagisk.so picounlock-patch-env/magisk32 && \
+			cp magisk-ext/assets/{stub.apk,util_functions.sh,boot_patch.sh,addon.d.sh} picounlock-patch-env && \
+			for lib in magisk-ext/lib/arm64-v8a/*.so
+				do cp $lib picounlock-patch-env/$(basename $lib | cut -c 4- | cut -d . -f 1)
+			done && \
+			mv picounlock-boot.img picounlock-patch-env/boot.img && \
+			# build image
+			cd picounlock-patch-env && \
+			KEEPFORCEENCRYPT=true KEEPVERITY=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh boot.img
+		`);
+		const readerPromise = (reader: AdbShellProtocolProcess["stdout"], outfn: (s: string) => void) => (async () => {
+			let strbuf = "";
+			for await (const chunk of reader) {
+				// decode to string
+				const chunkString = [...chunk].map(c => String.fromCodePoint(c)).join("");
+				strbuf += chunkString;
+
+				// new line?
+				if (strbuf.includes("\n")) {
+					const lines = strbuf.split("\n").map(s => s.trimEnd());
+					lines.slice(0, -1).forEach(l => outfn(l));
+					// the last line may not be done yet
+					strbuf = lines.at(-1) ?? "";
+				}
+			}
+			// the last line is definitely done now
+			if (strbuf.trim()) outfn(strbuf);
+		})();
+
+		const readPatchStdoutPromise = readerPromise(patchProcess.stdout, console.log);
+		const readPatchStderrPromise  = readerPromise(patchProcess.stderr, console.debug);
+		const patchExitCode = await patchProcess.exited;
+		await readPatchStdoutPromise;
+		await readPatchStderrPromise;
+
+		if (patchExitCode !== 0) throw new Error(`patching boot failed with status ${patchExitCode}`);
+
+		// pull boot
+		console.log(`Pulling patched boot.img from device...`);
+		const patchedImage = sync.read("/data/local/tmp/picounlock-patch-env/new-boot.img");
+		const chunks: ArrayBuffer[] = [];
+		for await (const chunk of patchedImage) chunks.push(chunk.buffer as ArrayBuffer);
+
+		const patchedImageBlob = new Blob(chunks);
+		await sync.dispose();
+
+		console.log(`Retrieved patched boot.img, size ${patchedImageBlob.size}`);
+
+		// clean up
+		const cleanupRes = await shellProtocol.spawnWaitText(`rm -rf /data/local/tmp/{picounlock-patch-env,magisk-ext}`);
+		if (cleanupRes.exitCode) console.warn("Failed to run cleanup task, proceeding anyway. Junk may be left in /data/local/tmp.");
+		console.log(cleanupRes.stdout);
+
+		return patchedImageBlob;
+	});
+
 	return <>
-		TODO: Do magisk patching
+		<Show when={magisk4pico.loading || installResource.state === "pending"}>Installing Magisk...</Show>
+		<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
+		<Show when={buildImageResource.state === "ready"}>Patched! Image has {buildImageResource()!.size} bytes</Show>
 	</>
 }
 
