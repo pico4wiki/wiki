@@ -127,11 +127,11 @@ function Step2(props: { serialNo: number, isProEnterprise: boolean }) {
 
 	// flash root! omg!
 	const [flashResource] = createResource(() => pulledImages.state === "ready" && pulledImages(), async () => {
-		const newAbl = await qdlFlashRoot(qdlConnection()!);
+		const unlockAbl = await qdlFlashRoot(qdlConnection()!);
 
 		// reboot back into android
 		await qdlConnection()!.reset();
-		return newAbl;
+		return unlockAbl;
 	});
 
 	return <>
@@ -150,15 +150,17 @@ function Step2(props: { serialNo: number, isProEnterprise: boolean }) {
 		<Show when={checkReady()}>
 			<Show when={pulledImages.state === "ready"} fallback={"Backing up stock firmware..."}>
 				<Show when={flashResource.state === "ready"} fallback={"Flashing vulnerable Pico Neo3 ABL..."}>
-					<Step3 serialNo={props.serialNo} backups={{...pulledImages()!, ablNew: flashResource()!}}/>
+					<Step3 serialNo={props.serialNo} backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
 				</Show>
 			</Show>
 		</Show>
 	</>
 }
 
+type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob };
+
 // in android: reboot into fastboot, then unlock the bootloader
-function Step3(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, devinfo: Blob, boot: Blob } }) {
+function Step3(props: { serialNo: number; backups: Backups }) {
 	const [ackReboot, setAckReboot] = createSignal(false);
 
 	const [rebootedToFastboot] = createResource(ackReboot, async () => {
@@ -226,7 +228,7 @@ function Step3(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 	// download backup zip
 	createEffect(async () => {
 		if (moveOn() === "done") {
-			const finishedZip = await packOutputFiles("TODO: logging", unlockCode(), props.backups.abl, props.backups.ablNew, props.backups.devinfo);
+			const finishedZip = await packOutputFiles("TODO: logging", unlockCode(), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo);
 			downloadZip(finishedZip);
 		}
 	})
@@ -291,7 +293,7 @@ function Step3(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 }
 
 // in android: install magisk, patch boot.img, and reboot to fastboot
-function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, devinfo: Blob, boot: Blob } }) {
+function Step4(props: { serialNo: number; backups: Backups }) {
 
 	const [magisk4pico] = createResource(() => fetch("https://pico4.wiki/magisk4pico/Magisk4Pico.apk").then(r => r.blob()));
 
@@ -319,7 +321,6 @@ function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 
 		const bootimg = await fetch("https://litter.catbox.moe/3vsywq2t0lx7d5ce.img").then(r => r.blob());
 
-		//debugger;
 		// push boot to headset
 		const sync = await adb()!.sync();
 		await sync.write({
@@ -369,7 +370,7 @@ function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 		})();
 
 		const readPatchStdoutPromise = readerPromise(patchProcess.stdout, console.log);
-		const readPatchStderrPromise  = readerPromise(patchProcess.stderr, console.debug);
+		const readPatchStderrPromise = readerPromise(patchProcess.stderr, console.debug);
 		const patchExitCode = await patchProcess.exited;
 		await readPatchStdoutPromise;
 		await readPatchStderrPromise;
@@ -383,14 +384,30 @@ function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 		for await (const chunk of patchedImage) chunks.push(chunk.buffer as ArrayBuffer);
 
 		const patchedImageBlob = new Blob(chunks);
-		await sync.dispose();
+
 
 		console.log(`Retrieved patched boot.img, size ${patchedImageBlob.size}`);
+
+		// now is a convenient time to push the ABL so they can easily be used later.
+		// this could be done any time, but I have an alive ADB connection now, so just Do It TM
+		console.log("Pushing ABLs to /sdcard, for future safekeeping.")
+		await sync.write({
+			filename: "/sdcard/abl-pico4.bin",
+			file: props.backups.abl.stream() as any,
+		});
+		await sync.write({
+			filename: "/sdcard/abl-picounlock.bin",
+			file: props.backups.ablUnlock.stream() as any,
+		});
+		await sync.dispose();
 
 		// clean up
 		const cleanupRes = await shellProtocol.spawnWaitText(`rm -rf /data/local/tmp/{picounlock-patch-env,magisk-ext}`);
 		if (cleanupRes.exitCode) console.warn("Failed to run cleanup task, proceeding anyway. Junk may be left in /data/local/tmp.");
 		console.log(cleanupRes.stdout);
+
+		// reboot to fastboot
+		await adb()!.power.bootloader();
 
 		return patchedImageBlob;
 	});
@@ -398,8 +415,66 @@ function Step4(props: { serialNo: number; backups: { abl: Blob, ablNew: Blob, de
 	return <>
 		<Show when={magisk4pico.loading || installResource.state === "pending"}>Installing Magisk...</Show>
 		<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
-		<Show when={buildImageResource.state === "ready"}>Patched! Image has {buildImageResource()!.size} bytes</Show>
+		<Show when={buildImageResource.state === "ready"}>
+			<Step5 serialNo={props.serialNo} backups={props.backups} bootNew={buildImageResource()!}/>
+		</Show>
 	</>
 }
 
 // step5: in fastboot: reboot to fastboot and flash boot.img and the original abl
+function Step5(props: { serialNo: number; bootNew: Blob; backups: Backups }) {
+
+	const [ackFastboot, setAckFastboot] = createSignal(0);
+
+	const [fastbootResource] = createResource(() => ackFastboot(), async () => {
+		const fastboot = await openFastboot();
+		if (!fastboot) throw new Error("failed to open fastboot")
+
+		console.log("Flashing Magisk patched boot.img")
+		await fastboot.flashBlob("boot", props.bootNew);
+
+		console.log("Reflashing PICO 4 ABL")
+		// reflash original ABL
+		await fastboot.flashBlob("abl", props.backups.abl);
+
+		console.log("PicoUnlock Web completed. Rebooting headset");
+		await fastboot.reboot();
+	});
+
+	createEffect(async () => {
+		if (fastbootResource.state === "ready") { // success!
+			const finishedZip = await packOutputFiles("TODO: logging", generateUnlock(props.serialNo), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo, {
+				bootOg: props.backups.boot,
+				bootPatched: props.bootNew
+			});
+			downloadZip(finishedZip);
+		}
+	})
+
+	return <>
+		<Show when={!ackFastboot()}>
+			<p>Patched! Rebooting headset to fastboot to flash the patched boot image and PICO 4 ABL.</p>
+			<button onclick={() => setAckFastboot(a => a + 1)}>Flash boot image</button>
+		</Show>
+		<Show when={fastbootResource.state === "errored"}>
+			<p>Failed to flash: ${fastbootResource.error + ""}</p>
+			<button onclick={() => setAckFastboot(a => a + 1)}>Try again</button>
+		</Show>
+		<Show when={fastbootResource.state === "pending"}>
+			<p>Flashing patched boot image and PICO 4 ABL...</p>
+		</Show>
+		<Show when={fastbootResource.state === "ready"}>
+			<p>Done! Your headset is rooted and is now rebooting into Android.</p>
+			<p>
+				It should boot quickly and consistently, as it is running the stock bootloader again.
+				This also means fastboot commands will not be accepted.
+			</p>
+			<p>If you need fastboot, you can reinstall the vulnerable ABL from an ADB shell with:</p>
+			<p><code>su -c 'dd if=/sdcard/abl-picounlock.bin of=/dev/block/by-name/abl'</code></p>
+			<p>
+				Please take a moment to check that the Magisk app is installed and lists as installed.
+				Do not update the Magisk app, special builds for PICO are required.
+			</p>
+		</Show>
+	</>
+}
