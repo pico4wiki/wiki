@@ -4,6 +4,7 @@ import {PackageManager} from "@yume-chan/android-bin";
 import {generateUnlock} from "../scripts/unlockCode.ts";
 import JSZip from "jszip";
 import type {AdbShellProtocolProcess} from "@yume-chan/adb";
+import {PicounlockLogger} from "../scripts/picounlockLogger.ts";
 
 function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob, devinfo: Blob, magisk?: {
 	bootOg: Blob,
@@ -34,12 +35,14 @@ function downloadZip(zip: Blob) {
 export function PicoUnlock() {
 	const [next, setNext] = createSignal(false);
 
+	const logger = new PicounlockLogger();
+
 	return (
 		<div class="p4w-custom card">
 			<Show when={"usb" in navigator}
 				  fallback={"Your browser does not support WebUSB. Please use one (such as Chromium) that does to use this tool."}>
 				<Show when={!next()}
-					  fallback={<Step4 backups={{} as any} serialNo={2458380675}/>}>
+					  fallback={<Step1 logger={logger} backups={{} as any} serialNo={2458380675}/>}>
 					<p>
 						You will need a reliable USB cable, and as the headset will not charge while in Qualcomm EDL
 						mode,
@@ -52,12 +55,20 @@ export function PicoUnlock() {
 					<button onclick={() => setNext(true)}>Unlock my PICO</button>
 				</Show>
 			</Show>
+
+			<h3>Logs</h3>
+			<code>
+				{logger.logs.map(l => <span>
+					{l.severity}: {l.content.map(c => c + "").join(";")}
+					<br/>
+				</span>)}
+			</code>
 		</div>)
 }
 
 
 // in android: get device type and serial number, reboot into EDL
-function Step1() {
+function Step1(props: { logger: PicounlockLogger; }) {
 	const [deviceInfo, actions] = createResource(async () => {
 		const adb = await openAdb();
 		if (!adb) throw new Error("Could not open ADB");
@@ -80,8 +91,11 @@ function Step1() {
 		// not a pico 4! bail!
 		if (productName !== "PICO 4" && !isProEnterprise) throw new Error(`Headset '${productName}' not supported`);
 
+		props.logger.info(`Device is a ${productName} with serial number ${serialNo}. Rebooting to EDL mode`);
+
 		return {serialNo, isProEnterprise, adb};
 	});
+	props.logger.logResourceErrors(deviceInfo);
 
 	const [isInQdlMode] = createResource(
 		() => deviceInfo.state === "ready" && deviceInfo(),
@@ -91,6 +105,8 @@ function Step1() {
 
 			return true;
 		});
+
+	props.logger.logResourceErrors(isInQdlMode);
 
 	return <>
 		<Switch>
@@ -118,7 +134,7 @@ function Step1() {
 }
 
 // in EDL: flash ABL and reboot into android
-function Step2(props: { serialNo: number, isProEnterprise: boolean }) {
+function Step2(props: { logger: PicounlockLogger;serialNo: number, isProEnterprise: boolean }) {
 	const [checkReady, setCheckReady] = createSignal(false);
 
 	const [qdlConnection] = createResource(checkReady, () => openQdl(props.isProEnterprise ? "lite" : "ddr"));
@@ -160,7 +176,7 @@ function Step2(props: { serialNo: number, isProEnterprise: boolean }) {
 type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob };
 
 // in android: reboot into fastboot, then unlock the bootloader
-function Step3(props: { serialNo: number; backups: Backups }) {
+function Step3(props: { logger: PicounlockLogger;serialNo: number; backups: Backups }) {
 	const [ackReboot, setAckReboot] = createSignal(false);
 
 	const [rebootedToFastboot] = createResource(ackReboot, async () => {
@@ -293,7 +309,7 @@ function Step3(props: { serialNo: number; backups: Backups }) {
 }
 
 // in android: install magisk, patch boot.img, and reboot to fastboot
-function Step4(props: { serialNo: number; backups: Backups }) {
+function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Backups }) {
 
 	const [magisk4pico] = createResource(() => fetch("https://pico4.wiki/magisk4pico/Magisk4Pico.apk").then(r => r.blob()));
 
@@ -422,7 +438,7 @@ function Step4(props: { serialNo: number; backups: Backups }) {
 }
 
 // step5: in fastboot: reboot to fastboot and flash boot.img and the original abl
-function Step5(props: { serialNo: number; bootNew: Blob; backups: Backups }) {
+function Step5(props: { logger: PicounlockLogger;serialNo: number; bootNew: Blob; backups: Backups }) {
 
 	const [ackFastboot, setAckFastboot] = createSignal(0);
 
