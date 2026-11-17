@@ -1,12 +1,16 @@
 import {createEffect, createMemo, createResource, createSignal, Match, Show, Switch} from "solid-js";
-import {openAdb, openFastboot, openQdl, qdlBackup, qdlFlashRoot} from "../scripts/usb.ts";
+import {openAdb, openFastboot, openQdl, qdlPullPartition, qdlFlashRoot} from "../scripts/usb.ts";
 import {PackageManager} from "@yume-chan/android-bin";
 import {generateUnlock} from "../scripts/unlockCode.ts";
 import JSZip from "jszip";
 import type {AdbShellProtocolProcess} from "@yume-chan/adb";
 import {PicoUnlockLogger} from "../scripts/picoUnlockLogger.ts";
 
-function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob, devinfo: Blob, magisk?: {
+function packOutputFiles(log: string, unlockCode: string, {abl4, abl3, devinfo, persist, bootOg, bootPatched}: {
+	abl4: Blob,
+	abl3: Blob,
+	devinfo: Blob,
+	persist: Blob,
 	bootOg: Blob,
 	bootPatched: Blob
 }) {
@@ -14,6 +18,7 @@ function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob
 	abl4 && zip.file("abl-p4-original.bin", abl4);
 	abl3 && zip.file("abl-p3-picounlock.bin", abl3);
 	devinfo && zip.file("devinfo", devinfo);
+	persist && zip.file("persist", persist);
 
 	log && zip.file("picounlock-web-log.txt", log);
 
@@ -27,12 +32,13 @@ ${unlockCode} is there to remind you of your headset's unlock code, for use with
 abl-p4-original.bin is the PICO 4 Android Bootloader shipped with your headset.
 abl-p3-picounlock.bin is the vulnerable Pico Neo3 Android Bootloader used in the rooting process.
 devinfo is a backup of your headset's devinfo partition.
+persist is a backup of your headset's persist partition, which contains headset-specific calibration data, in case you REALLY stuff it up.
 boot-original.img is the boot image for the firmware that was installed on your headset at the time of rooting.
 boot-magisk.img is the boot image for that same firmware, but with Magisk4Pico patched into it.
 `.trim())
 
-	magisk?.bootOg && zip.file("boot-original.img", magisk.bootOg);
-	magisk?.bootOg && zip.file("boot-magisk.img", magisk.bootPatched);
+	bootOg && zip.file("boot-original.img", bootOg);
+	bootPatched && zip.file("boot-magisk.img", bootPatched);
 
 
 	return zip.generateAsync({type: "blob"});
@@ -171,7 +177,9 @@ function Step1(props: { logger: PicoUnlockLogger; }) {
 function Step2(props: { logger: PicoUnlockLogger; serialNo: number, isProEnterprise: boolean }) {
 	const [checkReady, setCheckReady] = createSignal(0);
 
-	const [qdlConnection] = createResource(() => !!checkReady(), async () => {
+	const [qdlConnection] = createResource(checkReady, async (r) => {
+		if (!r) return;
+
 		const qdl = await openQdl(props.isProEnterprise ? "lite" : "ddr");
 		props.logger.info("Opened QDL connection");
 		return qdl;
@@ -180,9 +188,18 @@ function Step2(props: { logger: PicoUnlockLogger; serialNo: number, isProEnterpr
 
 	const [pulledImages] = createResource(() => qdlConnection.state === "ready" && qdlConnection(), async (qdl) => {
 		props.logger.info("Backing up original partitions");
-		const images = await qdlBackup(qdl);
+
+		props.logger.info("abl...");
+		const abl = await qdlPullPartition(qdl, "abl");
+		props.logger.info("devinfo...");
+		const devinfo = await qdlPullPartition(qdl, "devinfo");
+		props.logger.info("boot... (sometimes slow)");
+		const boot = await qdlPullPartition(qdl, "boot", 3 * 60 * 1000); // give it 3 mins, 10 secs may not cut it.
+		props.logger.info("persist...");
+		const persist = await qdlPullPartition(qdl, "persist");
+
 		props.logger.info("Backed up");
-		return images;
+		return {abl, devinfo, boot, persist};
 	});
 	props.logger.logResourceErrors(pulledImages);
 
@@ -209,24 +226,24 @@ function Step2(props: { logger: PicoUnlockLogger; serialNo: number, isProEnterpr
 				<code>{`for d in /sys/bus/usb/drivers/qcserial/*-*; do [ -e "$d" ] && echo -n "$(basename $d)" | sudo tee /sys/bus/usb/drivers/qcserial/unbind > /dev/null; done`}</code>
 			</p>
 			<p>Click done if you are on Windows/macOS, or you are on Linux and you have run that command.</p>
-			<button on:click={() => setCheckReady(a=>a+1)}>Done</button>
+			<button on:click={() => setCheckReady(a => a + 1)}>Done</button>
 		</Show>
-		<Show when={checkReady() && qdlConnection. state === "errored"}>
+		<Show when={checkReady() && qdlConnection.state === "errored"}>
 			<p>Connecting QDL failed: ${qdlConnection.error + ""}</p>
-			<button on:click={() => setCheckReady(a=>a+1)}>Try again</button>
+			<button on:click={() => setCheckReady(a => a + 1)}>Try again</button>
 		</Show>
-		<Show when={checkReady() && qdlConnection. state === "ready"}>
+		<Show when={checkReady() && qdlConnection.state === "ready"}>
 			<Show when={pulledImages.state === "ready"} fallback={"Backing up stock firmware..."}>
 				<Show when={flashResource.state === "ready"} fallback={"Flashing vulnerable Pico Neo3 ABL..."}>
 					<Step3 logger={props.logger} serialNo={props.serialNo}
-					       backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
+						   backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
 				</Show>
 			</Show>
 		</Show>
 	</>
 }
 
-type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob };
+type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob, persist: Blob };
 
 // in android: build magisk, then reboot to fastboot for unlock
 function Step3(props: { logger: PicoUnlockLogger; serialNo: number; backups: Backups }) {
@@ -390,7 +407,7 @@ function Step3(props: { logger: PicoUnlockLogger; serialNo: number; backups: Bac
 				<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
 				<Show when={buildImageResource.state === "ready"}>
 					<Step4 logger={props.logger} serialNo={props.serialNo} backups={props.backups}
-					       bootNew={buildImageResource()!}/>
+						   bootNew={buildImageResource()!}/>
 				</Show>
 			</Show>
 		</Show>
@@ -477,10 +494,16 @@ function Step4(props: { logger: PicoUnlockLogger; serialNo: number; backups: Bac
 	// download backup zip
 	createEffect(async () => {
 		if (moveOn() === "early" || installMagiskResource.state === "ready") {
-			const finishedZip = await packOutputFiles(props.logger.exportLogsTxt(), unlockCode(), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo, {
-				bootOg: props.backups.boot,
-				bootPatched: props.bootNew
-			});
+			const finishedZip = await packOutputFiles(props.logger.exportLogsTxt(), unlockCode(),
+				{
+					abl4: props.backups.abl,
+					abl3: props.backups.ablUnlock,
+					devinfo: props.backups.devinfo,
+					persist: props.backups.persist,
+					bootOg: props.backups.boot,
+					bootPatched: props.bootNew
+				}
+			);
 			downloadZip(finishedZip);
 		}
 	});

@@ -12,7 +12,7 @@
 	"dependencies": {
 		"@astrojs/solid-js": "^7.0.2",
 		"@astrojs/starlight": "^0.42.2",
-		"@pico4wiki/qdl": "^0.0.4",
+		"@pico4wiki/qdl": "^0.0.6",
 		"@yume-chan/adb": "^2.6.4",
 		"@yume-chan/adb-credential-web": "^2.1.0",
 		"@yume-chan/adb-daemon-webusb": "^2.3.2",

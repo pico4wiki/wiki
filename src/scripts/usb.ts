@@ -61,7 +61,7 @@ export async function qdlFlash(device: qdlDevice, abl: Blob): Promise<void> {
 }
 
 // similar to qdl.js flashBlob()
-async function pullPartition(device: qdlDevice, name: string): Promise<Blob> {
+export async function qdlPullPartition(device: qdlDevice, name: string): Promise<Blob> {
 	const [found, lun, partition, gpt] = await device.detectPartition(name);
 	if (!found) throw new Error(`qdl: Cannot find partition ${name} to pull`);
 
@@ -69,12 +69,4 @@ async function pullPartition(device: qdlDevice, name: string): Promise<Blob> {
 		throw new Error(`qdl: this code is designed for small partitions like abl and devinfo, and does not implement partitions of bigint size`);
 
 	return new Blob([await device.firehose.cmdReadBuffer(lun, partition.start, Number(partition.sectors)) as Uint8Array<ArrayBuffer>])
-}
-
-export async function qdlBackup(device: qdlDevice) {
-	const abl = await pullPartition(device, "abl");
-	const devinfo = await pullPartition(device, "devinfo");
-	const boot = await pullPartition(device, "boot");
-
-	return {abl, devinfo, boot};
 }
