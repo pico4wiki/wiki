@@ -70,10 +70,11 @@ export class PicoUnlockLogger {
 			console.debug = this.verbose;
 		}
 
+		let isPromise = false;
 		try {
 			const res = fn();
-			const isPromise = "then" in res;
-			return !isPromise ? res : res.then(result => (reset(), result), error => (reset(), error));
+			isPromise = "then" in res;
+			return !isPromise ? res : (res as PromiseLike<unknown>).then(result => (reset(), result), error => (reset(), error)) as ReturnType<T>;
 		} finally {
 			if (!isPromise) reset();
 		}
@@ -82,7 +83,7 @@ export class PicoUnlockLogger {
 	logResourceErrors<T>(res: Resource<T>) {
 		createEffect(() => {
 			if (res.state === "errored")
-				this.log("error", res.error)
+				queueMicrotask(() => this.log("error", res.error));
 		});
 	}
 }

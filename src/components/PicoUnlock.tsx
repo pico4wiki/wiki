@@ -19,7 +19,23 @@ function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob
 
 	unlockCode && zip.file(unlockCode, `Before the ABl will accept any fastboot flashing commands, you must run \`fastboot oem ${unlockCode} unlock\`.`)
 
-	return zip.generateAsync({compression: "STORE", type: "blob"});
+	zip.file("README.txt", `
+These files are output by PicoUnlock Web, at https://pico4.wiki/guides/root/00-picounlock
+
+picounlock-web-log.txt contains detailed logs from the rooting process.
+${unlockCode} is there to remind you of your headset's unlock code, for use with the Pico Neo3 ABL.
+abl-p4-original.bin is the PICO 4 Android Bootloader shipped with your headset.
+abl-p3-picounlock.bin is the vulnerable Pico Neo3 Android Bootloader used in the rooting process.
+devinfo is a backup of your headset's devinfo partition.
+boot-original.img is the boot image for the firmware that was installed on your headset at the time of rooting.
+boot-magisk.img is the boot image for that same firmware, but with Magisk4Pico patched into it.
+`.trim())
+
+	magisk?.bootOg && zip.file("boot-original.img", magisk.bootOg);
+	magisk?.bootOg && zip.file("boot-magisk.img", magisk.bootPatched);
+
+
+	return zip.generateAsync({type: "blob"});
 }
 
 function downloadZip(zip: Blob) {
@@ -38,32 +54,47 @@ export function PicoUnlock() {
 	const logger = new PicoUnlockLogger();
 
 	return (
-		<div class="p4w-custom card">
-			<Show when={"usb" in navigator}
-				  fallback={"Your browser does not support WebUSB. Please use one (such as Chromium) that does to use this tool."}>
-				<Show when={!next()}
-					  fallback={<Step1 logger={logger} />}>
-					<p>
-						You will need a reliable USB cable, and as the headset will not charge while in Qualcomm EDL
-						mode,
-						you need to ensure your headset is relatively well charged.
-					</p>
-					<p>
-						Please turn your headset on, and enable ADB if you have not yet done so.
-					</p>
+		<>
+			<div class="p4w-custom card">
+				<Show when={"usb" in navigator}
+					  fallback={"Your browser does not support WebUSB. Please use one (such as Chromium) that does to use this tool."}>
+					<Show when={!next()}
+						  fallback={<Step1 logger={logger}/>}>
+						<p>
+							This tool only covers <code>phoenix</code> headsets (PICO 4, PICO 4 Pro and PICO 4
+							Enterprise). It will not work on <code>sparrow</code> headsets (PICO 4 Ultra or Ultra
+							Enterprise)!
+						</p>
+						<p>
+							Rooting your headset and unlocking the bootloader <strong>requires</strong> your headset to
+							be factory reset! <strong>You will lose anything you do not back up!</strong>
+						</p>
 
-					<button onclick={() => setNext(true)}>Unlock my PICO</button>
+						<p>
+							You will need a reliable USB cable, and as the headset will not charge while in Qualcomm EDL
+							mode,
+							you need to ensure your headset is relatively well charged.
+						</p>
+						<p>
+							Please turn your headset on, and enable ADB if you have not yet done so.
+						</p>
+
+						<button onclick={() => setNext(true)}>Unlock my PICO</button>
+					</Show>
 				</Show>
-			</Show>
+			</div>
 
 			<h3>Logs</h3>
+			<pre>
 			<code>
 				{logger.logs.map(l => <span>
 					{l.severity}: {l.content.map(c => c + "").join(";")}
 					<br/>
 				</span>)}
 			</code>
-		</div>)
+			</pre>
+		</>
+	);
 }
 
 
@@ -137,10 +168,10 @@ function Step1(props: { logger: PicoUnlockLogger; }) {
 }
 
 // in EDL: flash ABL and reboot into android
-function Step2(props: { logger: PicoUnlockLogger;serialNo: number, isProEnterprise: boolean }) {
-	const [checkReady, setCheckReady] = createSignal(false);
+function Step2(props: { logger: PicoUnlockLogger; serialNo: number, isProEnterprise: boolean }) {
+	const [checkReady, setCheckReady] = createSignal(0);
 
-	const [qdlConnection] = createResource(checkReady, async () => {
+	const [qdlConnection] = createResource(() => !!checkReady(), async () => {
 		const qdl = await openQdl(props.isProEnterprise ? "lite" : "ddr");
 		props.logger.info("Opened QDL connection");
 		return qdl;
@@ -178,12 +209,17 @@ function Step2(props: { logger: PicoUnlockLogger;serialNo: number, isProEnterpri
 				<code>{`for d in /sys/bus/usb/drivers/qcserial/*-*; do [ -e "$d" ] && echo -n "$(basename $d)" | sudo tee /sys/bus/usb/drivers/qcserial/unbind > /dev/null; done`}</code>
 			</p>
 			<p>Click done if you are on Windows/macOS, or you are on Linux and you have run that command.</p>
-			<button on:click={() => setCheckReady(true)}>Done</button>
+			<button on:click={() => setCheckReady(a=>a+1)}>Done</button>
 		</Show>
-		<Show when={checkReady()}>
+		<Show when={checkReady() && qdlConnection. state === "errored"}>
+			<p>Connecting QDL failed: ${qdlConnection.error + ""}</p>
+			<button on:click={() => setCheckReady(a=>a+1)}>Try again</button>
+		</Show>
+		<Show when={checkReady() && qdlConnection. state === "ready"}>
 			<Show when={pulledImages.state === "ready"} fallback={"Backing up stock firmware..."}>
 				<Show when={flashResource.state === "ready"} fallback={"Flashing vulnerable Pico Neo3 ABL..."}>
-					<Step3 logger={props.logger} serialNo={props.serialNo} backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
+					<Step3 logger={props.logger} serialNo={props.serialNo}
+					       backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
 				</Show>
 			</Show>
 		</Show>
@@ -193,11 +229,13 @@ function Step2(props: { logger: PicoUnlockLogger;serialNo: number, isProEnterpri
 type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob };
 
 // in android: build magisk, then reboot to fastboot for unlock
-function Step3(props: { logger: PicoUnlockLogger;serialNo: number; backups: Backups }) {
+function Step3(props: { logger: PicoUnlockLogger; serialNo: number; backups: Backups }) {
 
 	const [magisk4pico] = createResource(() => fetch("https://pico4.wiki/magisk4pico/Magisk4Pico.apk").then(r => r.blob()));
 
-	const [adb] = createResource(async () => {
+	const [ackReboot, setAckReboot] = createSignal(0);
+
+	const [adb] = createResource(() => !!ackReboot(), async () => {
 		props.logger.info("Connecting ADB to install Magisk...")
 		const adb = await openAdb();
 		if (!adb) throw new Error("Could not open ADB");
@@ -325,12 +363,36 @@ function Step3(props: { logger: PicoUnlockLogger;serialNo: number; backups: Back
 
 		return patchedImageBlob;
 	});
+	props.logger.logResourceErrors(buildImageResource)
 
 	return <>
-		<Show when={magisk4pico.loading || installResource.state === "pending"}>Installing Magisk...</Show>
-		<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
-		<Show when={buildImageResource.state === "ready"}>
-			<Step4 logger={props.logger} serialNo={props.serialNo} backups={props.backups} bootNew={buildImageResource()!}/>
+		<Show when={!ackReboot()}>
+			<p>
+				The headset is now rebooting into Android.
+				As a side effect of using the vulnerable Pico Neo3 ABL, this can take a very long time. Please be
+				patient.
+			</p>
+			<p>
+				If the PICO logo disappears and, instead of PICO OS starting, the screen just goes black,
+				the headset failed to boot and bailed to EDL mode. Please hold the power button for 15 seconds until it
+				reboots and try again.
+			</p>
+			<button onclick={() => setAckReboot(a => a + 1)}>The headset is in PICO OS</button>
+		</Show>
+		<Show when={ackReboot()}>
+			<Show when={adb.state === "errored"}>
+				<p>Failed to get ADB connection.</p>
+				<button onclick={() => setAckReboot(a => a + 1)}>Try again</button>
+			</Show>
+
+			<Show when={adb.state === "ready"}>
+				<Show when={magisk4pico.loading || installResource.state === "pending"}>Installing Magisk...</Show>
+				<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
+				<Show when={buildImageResource.state === "ready"}>
+					<Step4 logger={props.logger} serialNo={props.serialNo} backups={props.backups}
+					       bootNew={buildImageResource()!}/>
+				</Show>
+			</Show>
 		</Show>
 	</>
 }
@@ -397,19 +459,6 @@ function Step4(props: { logger: PicoUnlockLogger; serialNo: number; backups: Bac
 
 		return success && (fastboot as object);
 	});
-
-	const RebootYapping = () => <>
-		<p>
-			The headset is now rebooting into Android.
-			As a side effect of using the vulnerable Pico Neo3 ABL, this can take a very long time. Please be
-			patient.
-		</p>
-		<p>
-			If the PICO logo disappears and, instead of PICO OS starting, the screen just goes black,
-			the headset failed to boot and bailed to EDL mode. Please hold the power button for 15 seconds until it
-			reboots and try again.
-		</p>
-	</>
 
 	const [moveOn, setMoveOn] = createSignal<undefined | "magisk" | "early">();
 
