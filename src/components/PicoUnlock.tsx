@@ -4,7 +4,7 @@ import {PackageManager} from "@yume-chan/android-bin";
 import {generateUnlock} from "../scripts/unlockCode.ts";
 import JSZip from "jszip";
 import type {AdbShellProtocolProcess} from "@yume-chan/adb";
-import {PicounlockLogger} from "../scripts/picounlockLogger.ts";
+import {PicoUnlockLogger} from "../scripts/picoUnlockLogger.ts";
 
 function packOutputFiles(log: string, unlockCode: string, abl4: Blob, abl3: Blob, devinfo: Blob, magisk?: {
 	bootOg: Blob,
@@ -35,14 +35,14 @@ function downloadZip(zip: Blob) {
 export function PicoUnlock() {
 	const [next, setNext] = createSignal(false);
 
-	const logger = new PicounlockLogger();
+	const logger = new PicoUnlockLogger();
 
 	return (
 		<div class="p4w-custom card">
 			<Show when={"usb" in navigator}
 				  fallback={"Your browser does not support WebUSB. Please use one (such as Chromium) that does to use this tool."}>
 				<Show when={!next()}
-					  fallback={<Step1 logger={logger} backups={{} as any} serialNo={2458380675}/>}>
+					  fallback={<Step1 logger={logger} />}>
 					<p>
 						You will need a reliable USB cable, and as the headset will not charge while in Qualcomm EDL
 						mode,
@@ -68,8 +68,9 @@ export function PicoUnlock() {
 
 
 // in android: get device type and serial number, reboot into EDL
-function Step1(props: { logger: PicounlockLogger; }) {
+function Step1(props: { logger: PicoUnlockLogger; }) {
 	const [deviceInfo, actions] = createResource(async () => {
+		props.logger.info("Connecting ADB to identify device...")
 		const adb = await openAdb();
 		if (!adb) throw new Error("Could not open ADB");
 
@@ -91,7 +92,7 @@ function Step1(props: { logger: PicounlockLogger; }) {
 		// not a pico 4! bail!
 		if (productName !== "PICO 4" && !isProEnterprise) throw new Error(`Headset '${productName}' not supported`);
 
-		props.logger.info(`Device is a ${productName} with serial number ${serialNo}. Rebooting to EDL mode`);
+		props.logger.info(`Device is a ${productName} with serial number ${serialNo}`);
 
 		return {serialNo, isProEnterprise, adb};
 	});
@@ -100,6 +101,7 @@ function Step1(props: { logger: PicounlockLogger; }) {
 	const [isInQdlMode] = createResource(
 		() => deviceInfo.state === "ready" && deviceInfo(),
 		async (devInfo) => {
+			props.logger.info("Rebooting to EDL mode");
 			await devInfo.adb.power.qualcommEdlMode();
 			await devInfo.adb.close();
 
@@ -124,7 +126,8 @@ function Step1(props: { logger: PicounlockLogger; }) {
 				<button onclick={() => actions.refetch()}>Try again</button>
 			</Match>
 			<Match when={deviceInfo.state === "ready"}>
-				<Show when={!isInQdlMode} fallback={<Step2 serialNo={deviceInfo()!.serialNo}
+				<Show when={!isInQdlMode} fallback={<Step2 logger={props.logger}
+														   serialNo={deviceInfo()!.serialNo}
 														   isProEnterprise={deviceInfo()!.isProEnterprise}/>}>
 					Rebooting your device into Qualcomm EDL mode, please wait...
 				</Show>
@@ -134,21 +137,35 @@ function Step1(props: { logger: PicounlockLogger; }) {
 }
 
 // in EDL: flash ABL and reboot into android
-function Step2(props: { logger: PicounlockLogger;serialNo: number, isProEnterprise: boolean }) {
+function Step2(props: { logger: PicoUnlockLogger;serialNo: number, isProEnterprise: boolean }) {
 	const [checkReady, setCheckReady] = createSignal(false);
 
-	const [qdlConnection] = createResource(checkReady, () => openQdl(props.isProEnterprise ? "lite" : "ddr"));
+	const [qdlConnection] = createResource(checkReady, async () => {
+		const qdl = await openQdl(props.isProEnterprise ? "lite" : "ddr");
+		props.logger.info("Opened QDL connection");
+		return qdl;
+	});
+	props.logger.logResourceErrors(qdlConnection);
 
-	const [pulledImages] = createResource(() => qdlConnection.state === "ready" && qdlConnection(), (qdl) => qdlBackup(qdl));
+	const [pulledImages] = createResource(() => qdlConnection.state === "ready" && qdlConnection(), async (qdl) => {
+		props.logger.info("Backing up original partitions");
+		const images = await qdlBackup(qdl);
+		props.logger.info("Backed up");
+		return images;
+	});
+	props.logger.logResourceErrors(pulledImages);
 
 	// flash root! omg!
 	const [flashResource] = createResource(() => pulledImages.state === "ready" && pulledImages(), async () => {
+		props.logger.info("Flashing vulnerable Pico Neo3 ABL");
 		const unlockAbl = await qdlFlashRoot(qdlConnection()!);
+		props.logger.info("Flashed, rebooting to Android");
 
 		// reboot back into android
 		await qdlConnection()!.reset();
 		return unlockAbl;
 	});
+	props.logger.logResourceErrors(flashResource);
 
 	return <>
 		<Show when={!checkReady()}>
@@ -166,7 +183,7 @@ function Step2(props: { logger: PicounlockLogger;serialNo: number, isProEnterpri
 		<Show when={checkReady()}>
 			<Show when={pulledImages.state === "ready"} fallback={"Backing up stock firmware..."}>
 				<Show when={flashResource.state === "ready"} fallback={"Flashing vulnerable Pico Neo3 ABL..."}>
-					<Step3 serialNo={props.serialNo} backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
+					<Step3 logger={props.logger} serialNo={props.serialNo} backups={{...pulledImages()!, ablUnlock: flashResource()!}}/>
 				</Show>
 			</Show>
 		</Show>
@@ -175,154 +192,27 @@ function Step2(props: { logger: PicounlockLogger;serialNo: number, isProEnterpri
 
 type Backups = { abl: Blob, ablUnlock: Blob, devinfo: Blob, boot: Blob };
 
-// in android: reboot into fastboot, then unlock the bootloader
-function Step3(props: { logger: PicounlockLogger;serialNo: number; backups: Backups }) {
-	const [ackReboot, setAckReboot] = createSignal(false);
-
-	const [rebootedToFastboot] = createResource(ackReboot, async () => {
-		const adb = await openAdb();
-		if (!adb) throw new Error("Could not open ADB");
-		await adb?.power.bootloader();
-		return true;
-	});
-
-	const unlockCode = createMemo(() => generateUnlock(props.serialNo));
-
-	const [ackFastboot, setAckFastboot] = createSignal(0);
-
-	const [fastbootResource] = createResource(() => /*rebootedToFastboot.state === "ready" &&*/ !!ackFastboot(), async () => {
-		const fastboot = await openFastboot();
-
-		// check is locked
-		const isAlreadyUnlocked = await fastboot.getVariable("unlocked") === "yes";
-		if (isAlreadyUnlocked) {
-			await fastboot.reboot();
-			return true; // already unlocked
-		}
-
-		// unlock headset
-		await fastboot.runCommand(`oem ${unlockCode()} unlock`);
-
-		try {
-			await fastboot.runCommand(`flashing unlock_critical`);
-		} catch (e) {
-			if (!(e + "").includes("already : unlocked")) throw e;
-			console.log(e)
-		}
-
-		try {
-			await fastboot.runCommand(`flashing unlock`);
-		} catch (e) {
-			if (!(e + "").includes("already : unlocked")) throw e;
-			console.log(e)
-		}
-
-		await fastboot.runCommand(`oem setenforce 0`);
-
-		const success = await fastboot.getVariable("unlocked") === "yes";
-
-		await fastboot.reboot(success ? "" : "bootloader");
-
-		return success;
-	});
-
-	const RebootYapping = () => <>
-		<p>
-			The headset is now rebooting into Android.
-			As a side effect of using the vulnerable Pico Neo3 ABL, this can take a very long time. Please be
-			patient.
-		</p>
-		<p>
-			If the PICO logo disappears and, instead of PICO OS starting, the screen just goes black,
-			the headset failed to boot and bailed to EDL mode. Please hold the power button for 15 seconds until it
-			reboots and try again.
-		</p>
-	</>
-
-	const [moveOn, setMoveOn] = createSignal<undefined | "choice" | "magisk" | "done">();
-
-	// download backup zip
-	createEffect(async () => {
-		if (moveOn() === "done") {
-			const finishedZip = await packOutputFiles("TODO: logging", unlockCode(), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo);
-			downloadZip(finishedZip);
-		}
-	})
-
-	return <>
-		<Show when={!ackReboot()}>
-			<RebootYapping/>
-			<button onclick={() => setAckReboot(true)}>The headset is in PICO OS</button>
-		</Show>
-		<Show when={rebootedToFastboot.state === "ready" && !moveOn()}>
-			<Show when={!ackFastboot()}>
-				Please allow USB access for fastboot, to unlock the bootloader.
-				<button onclick={() => setAckFastboot(a => a + 1)}>OK</button>
-			</Show>
-			<Show when={fastbootResource.state === "errored"}>{fastbootResource.error + ""}</Show>
-			<Show when={fastbootResource.state === "ready" && !fastbootResource()}>
-				<p>Unlocking failed first try. Rebooting fastboot for a second try</p>
-				<button onclick={() => setAckFastboot(a => a + 1)}>Try again</button>
-			</Show>
-			<Show when={fastbootResource.state === "ready" && fastbootResource()}>
-				<RebootYapping/>
-				<button onclick={() => setMoveOn("choice")}>The headset is in PICO OS</button>
-			</Show>
-		</Show>
-		<Switch>
-			<Match when={moveOn() === "choice"}>
-				<p>Your PICO now has an unlocked bootloader, with working fastboot.</p>
-				<p>
-					Before your bootloader will accept fastboot commands, you must send it
-					<code>fastboot oem {unlockCode()} unlock</code>.
-				</p>
-				<p>
-					For a root (recommended), you can continue to install Magisk.
-					This will give you userspace `su`, ability to install Magisk modules, and will allow you to restore
-					the original PICO 4 ABL, which resolves the slow and unreliable boot issue.
-					You will lose fastboot by doing that final step, but having root allows you to easily go back to the
-					Pico Neo3 ABL to get it, or just flash partitions from booted Android, at any time.
-				</p>
-
-				<div>
-					<button onclick={() => setMoveOn("magisk")}>Install Magisk (recommended)</button>
-					<button onclick={() => setMoveOn("done")}>Leave with unlocked bootloader</button>
-				</div>
-			</Match>
-			<Match when={moveOn() === "done"}>
-				<p>
-					Thank you for using PicoUnlock web!
-				</p>
-				<p>Made by pico4.wiki team.</p>
-				<p>
-					Remember to save your unlock code before leaving:
-					<code>fastboot oem {unlockCode()} unlock</code>
-				</p>
-				<p>
-					<code>picounlock-backup.zip</code>
-					contains your original ABL and the log of this tool, for future reference.
-				</p>
-			</Match>
-			<Match when={moveOn() === "magisk"}><Step4 {...props} /></Match>
-		</Switch>
-	</>;
-}
-
-// in android: install magisk, patch boot.img, and reboot to fastboot
-function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Backups }) {
+// in android: build magisk, then reboot to fastboot for unlock
+function Step3(props: { logger: PicoUnlockLogger;serialNo: number; backups: Backups }) {
 
 	const [magisk4pico] = createResource(() => fetch("https://pico4.wiki/magisk4pico/Magisk4Pico.apk").then(r => r.blob()));
 
 	const [adb] = createResource(async () => {
+		props.logger.info("Connecting ADB to install Magisk...")
 		const adb = await openAdb();
 		if (!adb) throw new Error("Could not open ADB");
+		props.logger.info("Connected")
 		return adb;
 	});
+	props.logger.logResourceErrors(adb);
 
 	const [installResource] = createResource(() => magisk4pico.state === "ready" && adb.state === "ready", async () => {
 		const magiskBlob = magisk4pico()!;
-		//await new PackageManager(adb()!).installStream(magiskBlob.size, magiskBlob.stream() as any);
+		props.logger.info("Installing Magisk4Pico.apk...")
+		await new PackageManager(adb()!).installStream(magiskBlob.size, magiskBlob.stream() as any);
+		props.logger.info("Installed Magisk")
 	});
+	props.logger.logResourceErrors(installResource);
 
 	const [buildImageResource] = createResource(() => installResource.state === "ready", async () => {
 		// find Magisk apk location
@@ -333,22 +223,25 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 			if (pkg.packageName === "com.topjohnwu.magisk") apkPath = pkg.sourceDir;
 		}
 
+		props.logger.info("Magisk APK is located at", apkPath);
+
 		if (!apkPath) throw new Error("No magisk installed on headset, even though we just installed it.")
 
-		const bootimg = await fetch("https://litter.catbox.moe/3vsywq2t0lx7d5ce.img").then(r => r.blob());
+		//const bootimg = await fetch("https://litter.catbox.moe/3vsywq2t0lx7d5ce.img").then(r => r.blob());
 
+		props.logger.info("Pushing raw boot.img to headset...");
 		// push boot to headset
 		const sync = await adb()!.sync();
 		await sync.write({
-			file: bootimg.stream() as any, //props.backups.boot.stream() as any,
+			file: props.backups.boot.stream() as any,
 			filename: "/data/local/tmp/picounlock-boot.img"
 		});
 
-		console.log(`Unzipping magisk from ${apkPath} to /data/local/tmp/magisk-ext`);
+		props.logger.info("Patching image with Magisk");
 
 		const shellProtocol = adb()!.subprocess.shellProtocol!;
 
-		const patchProcess = await shellProtocol.spawn(`
+		const patchScript = `
 			# unzip magisk
 			cd /data/local/tmp && \
 			rm -rf magisk-ext && \
@@ -365,7 +258,11 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 			# build image
 			cd picounlock-patch-env && \
 			KEEPFORCEENCRYPT=true KEEPVERITY=true PATCHVBMETAFLAG=false RECOVERYMODE=false sh boot_patch.sh boot.img
-		`);
+		`;
+
+		props.logger.verbose(patchScript);
+
+		const patchProcess = await shellProtocol.spawn(patchScript);
 		const readerPromise = (reader: AdbShellProtocolProcess["stdout"], outfn: (s: string) => void) => (async () => {
 			let strbuf = "";
 			for await (const chunk of reader) {
@@ -385,8 +282,8 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 			if (strbuf.trim()) outfn(strbuf);
 		})();
 
-		const readPatchStdoutPromise = readerPromise(patchProcess.stdout, console.log);
-		const readPatchStderrPromise = readerPromise(patchProcess.stderr, console.debug);
+		const readPatchStdoutPromise = readerPromise(patchProcess.stdout, props.logger.verbose);
+		const readPatchStderrPromise = readerPromise(patchProcess.stderr, props.logger.verbose);
 		const patchExitCode = await patchProcess.exited;
 		await readPatchStdoutPromise;
 		await readPatchStderrPromise;
@@ -394,7 +291,7 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 		if (patchExitCode !== 0) throw new Error(`patching boot failed with status ${patchExitCode}`);
 
 		// pull boot
-		console.log(`Pulling patched boot.img from device...`);
+		props.logger.info(`Pulling patched boot.img from device...`);
 		const patchedImage = sync.read("/data/local/tmp/picounlock-patch-env/new-boot.img");
 		const chunks: ArrayBuffer[] = [];
 		for await (const chunk of patchedImage) chunks.push(chunk.buffer as ArrayBuffer);
@@ -402,11 +299,11 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 		const patchedImageBlob = new Blob(chunks);
 
 
-		console.log(`Retrieved patched boot.img, size ${patchedImageBlob.size}`);
+		props.logger.info(`Retrieved patched boot.img, size is`, patchedImageBlob.size);
 
 		// now is a convenient time to push the ABL so they can easily be used later.
 		// this could be done any time, but I have an alive ADB connection now, so just Do It TM
-		console.log("Pushing ABLs to /sdcard, for future safekeeping.")
+		props.logger.info("Pushing ABLs to /sdcard, for future safekeeping.")
 		await sync.write({
 			filename: "/sdcard/abl-pico4.bin",
 			file: props.backups.abl.stream() as any,
@@ -419,10 +316,11 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 
 		// clean up
 		const cleanupRes = await shellProtocol.spawnWaitText(`rm -rf /data/local/tmp/{picounlock-patch-env,magisk-ext}`);
-		if (cleanupRes.exitCode) console.warn("Failed to run cleanup task, proceeding anyway. Junk may be left in /data/local/tmp.");
-		console.log(cleanupRes.stdout);
+		if (cleanupRes.exitCode) props.logger.warn("Failed to run cleanup task, proceeding anyway. Junk may be left in /data/local/tmp.");
+		if (cleanupRes.stdout.trim()) props.logger.warn(cleanupRes.stdout);
 
 		// reboot to fastboot
+		props.logger.info("Rebooting headset to fastboot");
 		await adb()!.power.bootloader();
 
 		return patchedImageBlob;
@@ -432,65 +330,178 @@ function Step4(props: { logger: PicounlockLogger;serialNo: number; backups: Back
 		<Show when={magisk4pico.loading || installResource.state === "pending"}>Installing Magisk...</Show>
 		<Show when={buildImageResource.state === "pending"}>Patching boot image with Magisk...</Show>
 		<Show when={buildImageResource.state === "ready"}>
-			<Step5 serialNo={props.serialNo} backups={props.backups} bootNew={buildImageResource()!}/>
+			<Step4 logger={props.logger} serialNo={props.serialNo} backups={props.backups} bootNew={buildImageResource()!}/>
 		</Show>
 	</>
 }
 
-// step5: in fastboot: reboot to fastboot and flash boot.img and the original abl
-function Step5(props: { logger: PicounlockLogger;serialNo: number; bootNew: Blob; backups: Backups }) {
+// in fastboot: unlock the bootloader and flash bootNew (and the og ABL)
+function Step4(props: { logger: PicoUnlockLogger; serialNo: number; backups: Backups; bootNew: Blob }) {
+	const unlockCode = createMemo(() => generateUnlock(props.serialNo));
 
 	const [ackFastboot, setAckFastboot] = createSignal(0);
 
-	const [fastbootResource] = createResource(() => ackFastboot(), async () => {
+	const [fastbootResource] = createResource(() => !!ackFastboot(), async () => {
+		props.logger.info("Connecting to fastboot...")
 		const fastboot = await openFastboot();
-		if (!fastboot) throw new Error("failed to open fastboot")
+		props.logger.info("Connected")
 
-		console.log("Flashing Magisk patched boot.img")
+		// check is locked
+		const isAlreadyUnlocked = await fastboot.getVariable("unlocked") === "yes";
+		if (isAlreadyUnlocked) {
+			props.logger.info("Bootloader is already unlocked!")
+			await fastboot.reboot();
+			return fastboot as object; // already unlocked
+		}
+
+		props.logger.info("Unlocking bootloader...")
+		// unlock headset
+		props.logger.info(`oem ${unlockCode()} unlock`)
+		await fastboot.runCommand(`oem ${unlockCode()} unlock`);
+
+		try {
+			props.logger.info(`flashing unlock_critical`)
+			await fastboot.runCommand(`flashing unlock_critical`);
+		} catch (e) {
+			if ((e + "").includes("already : unlocked")) {
+				props.logger.error(e)
+			} else {
+				throw e;
+			}
+		}
+
+		try {
+			props.logger.info(`flashing unlock`)
+			await fastboot.runCommand(`flashing unlock`);
+		} catch (e) {
+			if ((e + "").includes("already : unlocked")) {
+				props.logger.error(e)
+			} else {
+				throw e;
+			}
+		}
+
+		props.logger.info(`oem setenforce 0`)
+		await fastboot.runCommand(`oem setenforce 0`);
+
+		props.logger.info(`Checking if bootloader is unlocked...`)
+		const success = await fastboot.getVariable("unlocked") === "yes";
+		props.logger.info('Unlocked: ', success);
+
+		if (success)
+			props.logger.info("Unlocked successfully, asking the user if they wish to install Magisk and restore the PICO 4 ABL")
+		else {
+			props.logger.warn("Unlock failed. Reboot and try again.")
+			await fastboot.reboot(success ? "" : "bootloader");
+		}
+
+		return success && (fastboot as object);
+	});
+
+	const RebootYapping = () => <>
+		<p>
+			The headset is now rebooting into Android.
+			As a side effect of using the vulnerable Pico Neo3 ABL, this can take a very long time. Please be
+			patient.
+		</p>
+		<p>
+			If the PICO logo disappears and, instead of PICO OS starting, the screen just goes black,
+			the headset failed to boot and bailed to EDL mode. Please hold the power button for 15 seconds until it
+			reboots and try again.
+		</p>
+	</>
+
+	const [moveOn, setMoveOn] = createSignal<undefined | "magisk" | "early">();
+
+	const [installMagiskResource] = createResource(() => moveOn() === "magisk" && fastbootResource.state === "ready" && fastbootResource(), async (fastboot: any) => {
+		props.logger.info("Flashing Magisk patched boot.img")
 		await fastboot.flashBlob("boot", props.bootNew);
 
-		console.log("Reflashing PICO 4 ABL")
+		props.logger.info("Reflashing PICO 4 ABL")
 		// reflash original ABL
 		await fastboot.flashBlob("abl", props.backups.abl);
 
-		console.log("PicoUnlock Web completed. Rebooting headset");
+		props.logger.info("PicoUnlock Web completed. Rebooting headset");
 		await fastboot.reboot();
 	});
 
+	// download backup zip
 	createEffect(async () => {
-		if (fastbootResource.state === "ready") { // success!
-			const finishedZip = await packOutputFiles("TODO: logging", generateUnlock(props.serialNo), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo, {
+		if (moveOn() === "early" || installMagiskResource.state === "ready") {
+			const finishedZip = await packOutputFiles(props.logger.exportLogsTxt(), unlockCode(), props.backups.abl, props.backups.ablUnlock, props.backups.devinfo, {
 				bootOg: props.backups.boot,
 				bootPatched: props.bootNew
 			});
 			downloadZip(finishedZip);
 		}
-	})
+	});
 
 	return <>
-		<Show when={!ackFastboot()}>
-			<p>Patched! Rebooting headset to fastboot to flash the patched boot image and PICO 4 ABL.</p>
-			<button onclick={() => setAckFastboot(a => a + 1)}>Flash boot image</button>
+		<Show when={!moveOn()}>
+			<Show when={!ackFastboot()}>
+				Please allow USB access for fastboot, to unlock the bootloader.
+				<button onclick={() => setAckFastboot(a => a + 1)}>OK</button>
+			</Show>
+			<Show when={fastbootResource.state === "errored"}>{fastbootResource.error + ""}</Show>
+			<Show when={fastbootResource.state === "ready" && !fastbootResource()}>
+				<p>Unlocking failed first try. Rebooting fastboot for a second try</p>
+				<button onclick={() => setAckFastboot(a => a + 1)}>Try again</button>
+			</Show>
+
+			<Show when={fastbootResource.state === "ready" && fastbootResource()}>
+				<p>Your PICO now has an unlocked bootloader, with working fastboot.</p>
+				<p>
+					Before your bootloader will accept fastboot commands, you must send it
+					<code>fastboot oem {unlockCode()} unlock</code>.
+				</p>
+				<p>
+					To root your headset (recommended), you can continue to installing Magisk.
+					This will give you userspace `su`, ability to install Magisk modules, and will allow you to restore
+					the original PICO 4 ABL, which resolves the slow and unreliable boot issue.
+					You will lose fastboot flashing by doing that final step, but having root allows you to easily go
+					back to the Pico Neo3 ABL to use it, or simply flash partitions from Android at any time.
+				</p>
+
+				<div>
+					<button onclick={() => setMoveOn("magisk")}>Install Magisk (recommended)</button>
+					<button onclick={() => setMoveOn("early")}>Leave with unlocked bootloader</button>
+				</div>
+			</Show>
 		</Show>
-		<Show when={fastbootResource.state === "errored"}>
-			<p>Failed to flash: ${fastbootResource.error + ""}</p>
-			<button onclick={() => setAckFastboot(a => a + 1)}>Try again</button>
-		</Show>
-		<Show when={fastbootResource.state === "pending"}>
-			<p>Flashing patched boot image and PICO 4 ABL...</p>
-		</Show>
-		<Show when={fastbootResource.state === "ready"}>
-			<p>Done! Your headset is rooted and is now rebooting into Android.</p>
-			<p>
-				It should boot quickly and consistently, as it is running the stock bootloader again.
-				This also means fastboot commands will not be accepted.
-			</p>
-			<p>If you need fastboot, you can reinstall the vulnerable ABL from an ADB shell with:</p>
-			<p><code>su -c 'dd if=/sdcard/abl-picounlock.bin of=/dev/block/by-name/abl'</code></p>
-			<p>
-				Please take a moment to check that the Magisk app is installed and lists as installed.
-				Do not update the Magisk app, special builds for PICO are required.
-			</p>
-		</Show>
-	</>
+		<Switch>
+			<Match when={moveOn() === "early"}>
+				<p>
+					Thank you for using PicoUnlock web!
+				</p>
+				<p>Made by pico4.wiki team.</p>
+				<p>
+					Remember to save your unlock code before leaving:
+					<code>fastboot oem {unlockCode()} unlock</code>
+				</p>
+				<p>
+					<code>picounlock-backup.zip</code>
+					contains your original ABL and the log of this tool, for future reference.
+				</p>
+			</Match>
+			<Match when={moveOn() === "magisk"}>
+				<Show when={installMagiskResource.state === "pending"}>
+					<p>Flashing Magisk and PICO 4 ABL...</p>
+				</Show>
+				<Show when={installMagiskResource.state === "errored"}>
+					<p>Flashing Magisk and PICO 4 ABL back failed</p>
+					<p>{installMagiskResource.error + ""}</p>
+				</Show>
+				<Show when={installMagiskResource.state === "ready"}>
+					<p>
+						Thank you for using PicoUnlock web!
+					</p>
+					<p>Made by pico4.wiki team.</p>
+					<p>
+						<code>picounlock-backup.zip</code>
+						contains your unlock code and original boot image the log of this tool, for future reference.
+					</p>
+				</Show>
+			</Match>
+		</Switch>
+	</>;
 }

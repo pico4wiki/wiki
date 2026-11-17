@@ -7,7 +7,7 @@ type Log = {
 	severity?: "verbose" | "info" | "warn" | "error";
 }
 
-export class PicounlockLogger {
+export class PicoUnlockLogger {
 	#logSig = createSignal<Log[]>([], {equals: false /* update array in place */});
 
 	get logs() {
@@ -56,7 +56,7 @@ export class PicounlockLogger {
 	shim<T extends (...args: any) => any>(fn: T): ReturnType<T> {
 		const reset = () => {
 			if (--this.#shimCount > 0) return;
-			
+
 			console.log = this.#shimOrigConsole.log;
 			console.warn = this.#shimOrigConsole.warn;
 			console.error = this.#shimOrigConsole.error;
