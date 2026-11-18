@@ -1,6 +1,6 @@
-import {Adb, AdbDaemonTransport} from "@yume-chan/adb"
-import {AdbDaemonWebUsbDeviceManager} from "@yume-chan/adb-daemon-webusb";
-import AdbWebCredentialStore from "@yume-chan/adb-credential-web"
+import { Adb, AdbDaemonTransport } from "@yume-chan/adb";
+import AdbWebCredentialStore from "@yume-chan/adb-credential-web";
+import { AdbDaemonWebUsbDeviceManager } from "@yume-chan/adb-daemon-webusb";
 
 const USB_MANAGER = AdbDaemonWebUsbDeviceManager.BROWSER;
 const USB_CRED_STORE = new AdbWebCredentialStore("pico4.wiki");
