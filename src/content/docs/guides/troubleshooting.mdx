@@ -1,0 +1,58 @@
+---
+title: Tips & Troubleshooting
+description: Helpful fixes and miscellaneous info for solving issues with your PICO 4
+---
+
+import { Steps } from "@astrojs/starlight/components"
+
+Use the contents sidebar / menu to help find the most useful information.
+
+## How do I get into the bootloader/recovery?
+
+While booting your headset, hold volume down to access the bootloader, or hold volume up to access recovery.
+
+While in recovery, you will see an Android symbol and "No command" text. To get past this screen to the actual recovery
+interface, hold down power, press volume up, then release power.
+
+If you are booted into PICO OS, you can use ADB to reboot to recovery (`adb reboot recovery` / `adb reboot bootloader`).
+
+You can access Qualcomm EDL mode from PICO OS or recovery with `adb reboot edl`.
+It cannot be reached from the bootloader or a powered off state, but the headset will enter EDL if a boot fails.
+
+## My headset won't charge or turn on
+
+Your headset may be in Qualcomm EDL mode. In this mode, the screen is blank, the battery will not charge,
+holding the power button for a few seconds will not do anything, and the headset will identify itself as a
+Qualcomm modem over USB instead of the usual old Nokia phone that a powered-off PICO 4 reports (???).
+
+To get out of this state, hold the power button for 15 seconds.
+
+## Which USB device is my headset?
+
+A PICO 4 Enterprise reports over USB as:
+- `Pico PICO 4 Enterprise` (PICO OS, Recovery mode)
+- `Google Inc. Xiaomi Mi/Redmi 2 (fastboot)` (Bootloader)
+- `Qualcomm, Inc. Gobi Wireless Modem (QDL mode)` (Qualcomm EDL mode)
+- `Qualcomm, Inc. TA-1004 [Nokia 8]` (Powered off)
+
+If anyone has a PICO 4 or PICO 4 Pro that reports differently, PR it!
+
+## PICO Connect has an unacceptable microphone latency
+
+Some users find that their microphone slowly builds up an unacceptable latency (multiple seconds) with PICO Connect.
+
+This is caused by the PICO streaming microphone going to sleep when not in use, and then picking up more latency when
+it wakes up again. Hence, it can be worked around by setting up a virtual audio device to keep it active at all times.
+
+<Steps>
+	1. Install [VB-CABLE](https://vb-audio.com/Cable) (extract it and run VBCABLE_Setup_x64)
+	2. Right click your volume mixer > Sound Settings
+	3. Scroll down and open More sound settings, and go to the Recording tab
+	4. Select PicoStreamingMicrophone and open the Properties
+	5. In the Listen tab, enable *Listen to this Device* and set *Playback through this device* to CABLE Input
+</Steps>
+
+Now Windows will route the audio from the PICO Connect mic into VB-CABLE at all times, and works around the latency issue.
+
+If you still experience latency issues, try disabling Headset Microphone Noise Reduction in PICO Connect.
+This should not be necessary most of the time, though.

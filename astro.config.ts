@@ -49,6 +49,7 @@ export default defineConfig({
 								{ label: "VRCFT without PICO Connect", slug: "guides/ft/vrcft-stream" },
 							],
 						},
+						{ label: "Tips & Troubleshooting", slug: "guides/troubleshooting" },
 					],
 				},
 				{
