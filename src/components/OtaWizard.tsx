@@ -1,4 +1,4 @@
-import {openAdb} from "../scripts/adb.ts";
+import {openAdb} from "../scripts/usb.ts";
 import {type Firmware, getFamilyAndBuildNumber} from "../scripts/headsetVersion.ts";
 import {type Component, createEffect, createResource, createSignal, For, Show} from "solid-js";
 

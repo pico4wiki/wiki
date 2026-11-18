@@ -37,7 +37,8 @@ export default defineConfig({
 						{
 							label: "Rooting",
 							items: [
-								{ label: "Rooting", slug: "guides/root/01-root" },
+								{ label: "Rooting (PicoUnlock Web)", slug: "guides/root/00-picounlock" },
+								{ label: "Rooting (Manual)", slug: "guides/root/01-root" },
 								{ label: "Post-Root Suggestions", slug: "guides/root/02-post-root" },
 								{ label: "Unrooting", slug: "guides/root/03-unroot" },
 							],
